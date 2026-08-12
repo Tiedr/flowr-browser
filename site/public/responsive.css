@@ -1,0 +1,3 @@
+.omnibox{min-width:0;overflow:hidden;white-space:nowrap}
+.omnibox kbd{flex:none}
+@media(max-width:760px){.omnibox kbd{display:none}}
