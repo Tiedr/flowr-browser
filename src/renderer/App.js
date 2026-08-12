@@ -1540,6 +1540,19 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     host.appendChild(wv);
     webviewsRef.current.set(tab.id, wv);
 
+    // Chromium guests occasionally retain the tiny pre-layout size they had
+    // when first attached. Drive the guest with explicit pixel bounds on every
+    // host resize; percentages alone do not reliably resize Electron webviews.
+    const sizeGuest = () => {
+      const rect = host.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
+      wv.style.width = `${Math.ceil(rect.width)}px`;
+      wv.style.height = `${Math.ceil(rect.height)}px`;
+    };
+    const resizeObserver = new ResizeObserver(sizeGuest);
+    resizeObserver.observe(host);
+    sizeGuest();
+
     const h = () => handlersRef.current;
 
     let loaded = false;
@@ -1576,6 +1589,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     const onNewWin = (e, url) => { e.preventDefault(); if (url) h().newTab(url); };
     const onDomReady = () => {
       try { h().register(wv.getWebContentsId()); } catch (_) {}
+      sizeGuest();
     };
 
     wv.addEventListener('did-navigate', onNav);
@@ -1591,6 +1605,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     wv.addEventListener('dom-ready', onDomReady);
 
     return () => {
+      resizeObserver.disconnect();
       wv.removeEventListener('did-navigate', onNav);
       wv.removeEventListener('did-navigate-in-page', onNav);
       wv.removeEventListener('page-title-updated', onTitle);

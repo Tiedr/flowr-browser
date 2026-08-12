@@ -15,12 +15,13 @@ const Store = require('./store');
 const { parseExtensionId, installStoreExtension } = require('./crx');
 // Tieddr Vault — password manager + Tieddr Wallet, synced to the encrypted mirror.
 const vault = require('./vault');
+const vaultAccount = require('./vault/account');
+const { APPWRITE } = require('./vault/config');
 
 // --- Tieddr Account SSO + bookmark sync ------------------------------------
 const TIEDDR_ACCOUNT_BASE = 'https://account.tieddr.com';
 const TIEDDR_API_BASE = 'https://api.account.tieddr.com';
 const TIEDDR_SPACE_BASE = 'https://space.tieddr.com';
-const TIEDDR_APPWRITE_PROJECT_ID = '6a2736880012b5460a01';
 const FLOWR_RELEASES_API = 'https://api.github.com/repos/Tiedr/flowr-browser/releases/latest';
 // OAuth client registered on account.tieddr.com/apps for "Flow" — trusted
 // first-party app, redirect_uri below matches EXACTLY what's registered.
@@ -217,15 +218,30 @@ function contextParams(params) {
 async function refreshTieddrProfile(account) {
   if (!account?.token) return account;
   try {
+    let info = {};
     const res = await fetch(`${TIEDDR_API_BASE}/v1/oauth/userinfo`, { headers: { Authorization: `Bearer ${account.token}` } });
-    if (!res.ok) return account;
-    const info = await res.json();
+    if (res.ok) info = await res.json();
+
+    // Older Account API deployments only returned sub/email. Resolve the
+    // canonical Appwrite identity with the user-scoped JWT that Vault already
+    // mints, so Flowr always receives the real name and avatar preferences.
+    vaultAccount.setAccessToken(account.token);
+    const jwt = await vaultAccount.getAppwriteJwt();
+    if (jwt) {
+      const identityRes = await fetch(`${APPWRITE.endpoint}/account`, {
+        headers: { 'X-Appwrite-Project': APPWRITE.projectId, 'X-Appwrite-JWT': jwt }
+      });
+      if (identityRes.ok) {
+        const identity = await identityRes.json();
+        info = { ...info, sub: identity.$id || info.sub, email: identity.email || info.email, name: identity.name || info.name, avatarId: identity.prefs?.avatarId || info.avatarId };
+      }
+    }
     const updated = {
       ...account,
       uid: info.sub || account.uid,
       email: info.email || account.email,
       name: info.name || account.name || 'Tieddr account',
-      avatar: info.avatarId ? `https://cloud.appwrite.io/v1/storage/buckets/avatars/files/${encodeURIComponent(info.avatarId)}/view?project=${TIEDDR_APPWRITE_PROJECT_ID}` : ''
+      avatar: info.avatarId ? `${APPWRITE.endpoint}/storage/buckets/avatars/files/${encodeURIComponent(info.avatarId)}/view?project=${APPWRITE.projectId}` : account.avatar || ''
     };
     accountStore.set('account', updated);
     return updated;
@@ -787,18 +803,18 @@ async function exchangeTieddrCode(code, verifier) {
       // Build a Gravatar URL from the email hash — widely used default avatar
       if (email) {
         const emailHash = crypto.createHash('md5').update(email.trim().toLowerCase()).digest('hex');
-        avatar = info.avatarId ? `https://cloud.appwrite.io/v1/storage/buckets/avatars/files/${encodeURIComponent(info.avatarId)}/view?project=${TIEDDR_APPWRITE_PROJECT_ID}` : '';
+        avatar = info.avatarId ? `${APPWRITE.endpoint}/storage/buckets/avatars/files/${encodeURIComponent(info.avatarId)}/view?project=${APPWRITE.projectId}` : '';
       }
     }
   } catch (_) { /* profile display is best-effort; the token itself is what matters */ }
 
-  return {
+  return refreshTieddrProfile({
     token: tokenData.access_token,
     refreshToken: tokenData.refresh_token || null,
     uid, email,
     name: name || 'Tieddr account',
     avatar
-  };
+  });
 }
 
 // Attempt to refresh an expired access token using the stored refresh token.
