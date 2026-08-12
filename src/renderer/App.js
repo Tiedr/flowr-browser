@@ -821,6 +821,14 @@ function PasswordRow({ p, onReveal, onCopy, onDelete, theme }) {
 function SettingsPage({ settings, profiles, active, update, createProfile, switchProfile, openPage, go, clearData, setDefault, chooseDownloads, reset, account, onSignIn, onSignOut, passwords, onRevealPw, onCopyPw, onDeletePw, pwEncAvail, theme, biometricAvailable, changeVaultPin }) {
   const [section, setSection] = useState('account');
   const [name, setName] = useState('');
+  const [updateStatus, setUpdateStatus] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const checkUpdate = async () => {
+    setCheckingUpdate(true);
+    const result = await ipc?.invoke('check-for-updates');
+    setUpdateStatus(result || { ok: false, error: 'Update service unavailable' });
+    setCheckingUpdate(false);
+  };
   const S = SET_SECTIONS.find(x => x.id === section) || SET_SECTIONS[0];
 
   const body = () => {
@@ -1110,15 +1118,20 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             <Pick label="Update channel" values={['stable', 'beta', 'dev']} value={settings.updateChannel || 'stable'} format={v => ({ stable: 'Stable', beta: 'Beta (early features)', dev: 'Dev (nightly)' })[v]} onPick={v => update({ updateChannel: v })} theme={theme} />
             <Toggle label="Check for updates automatically" detail="Flow checks for new versions on startup." value={settings.autoUpdate !== false} onPress={() => update({ autoUpdate: settings.autoUpdate === false })} theme={theme} />
             <Toggle label="Background update downloads" detail="Download updates in the background and install on next restart." value={!!settings.backgroundUpdateDownload} onPress={() => update({ backgroundUpdateDownload: !settings.backgroundUpdateDownload })} theme={theme} />
-            <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border, marginTop: 6 }]} onPress={() => ipc?.invoke('check-for-updates')}>
-              <ArrowUpCircle size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Check for updates now</Text>
+            <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border, marginTop: 6 }]} onPress={checkUpdate} disabled={checkingUpdate}>
+              <ArrowUpCircle size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>{checkingUpdate ? 'Checking…' : 'Check for updates now'}</Text>
             </TouchableOpacity>
+            {updateStatus ? <View style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: updateStatus.available ? theme.accentSoft : theme.soft, borderWidth: 1, borderColor: updateStatus.available ? theme.accent : theme.border }}>
+              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>{!updateStatus.ok ? 'Could not check for updates' : updateStatus.available ? `Flowr ${updateStatus.latestVersion} is ready` : 'You’re up to date'}</Text>
+              <Text style={{ color: theme.muted, fontSize: 12.5, marginTop: 4 }}>{!updateStatus.ok ? updateStatus.error : updateStatus.available ? `You have ${updateStatus.currentVersion}. Download the latest secure release.` : `Flowr ${updateStatus.currentVersion} is the latest release.`}</Text>
+              {updateStatus.available ? <TouchableOpacity onPress={() => ipc?.invoke('open-external', updateStatus.downloadUrl)} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Download update</Text></TouchableOpacity> : null}
+            </View> : null}
           </Card>
           <Card title="Release notes" icon={BookOpen} theme={theme}>
             <Text style={[s.rs, { color: theme.muted, lineHeight: 19 }]}>See what's new in Flow Browser.</Text>
             <InfoRow label="Current version" value={APP_VERSION} theme={theme} />
             <InfoRow label="Engine" value="Electron 43 · Chromium 134" theme={theme} />
-            <InfoRow label="Release date" value="July 2026" theme={theme} />
+            <InfoRow label="Release date" value="August 2026" theme={theme} />
           </Card>
         </>);
       case 'reset':
@@ -1331,7 +1344,7 @@ function TieddrVaultPage({ state, items, account, onSignIn, onUnlock, onLock, on
   if (!state.linked) {
     return (
       <View style={{ alignItems: 'center', paddingTop: 56 }}>
-        <VaultMark height={40} />
+        <VaultMark height={40} dark={theme.id === 'flow' || theme.id === 'graphite'} />
         <Text style={{ fontSize: 22, fontWeight: '300', color: theme.text, marginTop: 18 }}>Your secrets, sealed on this device.</Text>
         <Text style={{ fontSize: 14, color: theme.muted, marginTop: 8, textAlign: 'center', maxWidth: 380 }}>Sign in with your Tieddr Account, then unlock with your PIN. Passwords, Tieddr Wallet cards, and secrets sync across every Tieddr app.</Text>
         <TouchableOpacity onPress={onSignIn} style={{ marginTop: 24, backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1351,7 +1364,7 @@ function TieddrVaultPage({ state, items, account, onSignIn, onUnlock, onLock, on
     };
     return (
       <View style={{ alignItems: 'center', paddingTop: 56, maxWidth: 360, alignSelf: 'center', width: '100%' }}>
-        <VaultMark height={34} />
+        <VaultMark height={34} dark={theme.id === 'flow' || theme.id === 'graphite'} />
         <Text style={{ fontSize: 20, fontWeight: '700', color: theme.text, marginTop: 16 }}>{state.hasVault ? 'Enter your vault PIN' : 'Create a vault PIN'}</Text>
         <Text style={{ fontSize: 13, color: theme.muted, marginTop: 6, marginBottom: 18, textAlign: 'center' }}>{account && account.email ? `Signed in as ${account.email}` : 'A 6-digit PIN unlocks your vault.'}</Text>
         <TextInput value={pin} onChangeText={v => setPin(v.replace(/\D/g, '').slice(0, 6))} placeholder="● ● ● ● ● ●" placeholderTextColor={theme.faint}
@@ -1396,7 +1409,7 @@ function TieddrVaultPage({ state, items, account, onSignIn, onUnlock, onLock, on
       <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.border }, GLASS_LIGHT]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View>
-            <VaultMark height={26} />
+            <VaultMark height={26} dark={theme.id === 'flow' || theme.id === 'graphite'} />
             <Text style={{ fontSize: 12, color: theme.muted, marginTop: 6 }}>{items.length} item{items.length === 1 ? '' : 's'} \u00B7 end-to-end encrypted</Text>
           </View>
         </View>
@@ -1743,6 +1756,9 @@ export default function App() {
     setBookmarks(b || []); setHistory(h || []); setDownloads(d || []);
     setProfiles(p || []); setActiveProfile(a || 'default'); setExtensions(e || []); setFolders(f || []);
     setNotes(n || []); setNoteFolders(nf || []);
+    if (r?.autoUpdate !== false) ipc.invoke('check-for-updates').then(result => {
+      if (result?.available) console.info(`[Flowr] Update ${result.latestVersion} is available`);
+    }).catch(() => {});
     // Trigger a background Tieddr Space sync on load — if the user is
     // signed in, this fetches fresh bookmarks/notes from Space and the
     // bookmarks-changed/notes-changed listeners above will update state.

@@ -9,7 +9,7 @@ const ipc = window.electron?.ipcRenderer;
 const CHROME_H = 92;
 const BANNER_H = 60;
 const FIND_H = 48;
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const T_BG = { transitionProperty: 'background-color, border-color, opacity', transitionDuration: '160ms', transitionTimingFunction: EASE };
 const HOVER = { hoverable: '1' };
@@ -121,7 +121,7 @@ const TieddrMark = ({ size = 19, color = 'currentColor' }) => (
 
 // The actual Tieddr Vault logo (pear-in-a-padlock badge + "Vault." wordmark),
 // used to brand the built-in vault surface. Aspect ratio 785x206.
-const VaultMark = ({ height = 22 }) => <Image source={{ uri: vaultLogo }} style={{ height, width: height * (785 / 206), resizeMode: 'contain' }} />;
+const VaultMark = ({ height = 22, dark = false }) => <Image source={{ uri: vaultLogo }} style={{ height, width: height * (785 / 206), resizeMode: 'contain', filter: dark ? 'brightness(0) invert(1)' : undefined }} />;
 
 const TIEDDR_APPS = [
   { name: 'Space', tagline: 'Bookmarks, notes, to-dos & clipboard.', url: 'https://space.tieddr.com', icon: 'https://account.tieddr.com/logos/space.png' },

@@ -20,6 +20,8 @@ const vault = require('./vault');
 const TIEDDR_ACCOUNT_BASE = 'https://account.tieddr.com';
 const TIEDDR_API_BASE = 'https://api.account.tieddr.com';
 const TIEDDR_SPACE_BASE = 'https://space.tieddr.com';
+const TIEDDR_APPWRITE_PROJECT_ID = '6a2736880012b5460a01';
+const FLOWR_RELEASES_API = 'https://api.github.com/repos/Tiedr/flowr-browser/releases/latest';
 // OAuth client registered on account.tieddr.com/apps for "Flow" — trusted
 // first-party app, redirect_uri below matches EXACTLY what's registered.
 const TIEDDR_CLIENT_ID = 'client_ohHEAmTYYKNYVdE6';
@@ -210,6 +212,24 @@ function contextParams(params) {
     selectionText: (params.selectionText || '').trim(),
     editFlags: params.editFlags || {}
   };
+}
+
+async function refreshTieddrProfile(account) {
+  if (!account?.token) return account;
+  try {
+    const res = await fetch(`${TIEDDR_API_BASE}/v1/oauth/userinfo`, { headers: { Authorization: `Bearer ${account.token}` } });
+    if (!res.ok) return account;
+    const info = await res.json();
+    const updated = {
+      ...account,
+      uid: info.sub || account.uid,
+      email: info.email || account.email,
+      name: info.name || account.name || 'Tieddr account',
+      avatar: info.avatarId ? `https://cloud.appwrite.io/v1/storage/buckets/avatars/files/${encodeURIComponent(info.avatarId)}/view?project=${TIEDDR_APPWRITE_PROJECT_ID}` : ''
+    };
+    accountStore.set('account', updated);
+    return updated;
+  } catch (_) { return account; }
 }
 
 // Map a keyboard event to an action name. Ctrl on Windows/Linux, Cmd on macOS.
@@ -753,6 +773,7 @@ async function exchangeTieddrCode(code, verifier) {
   // scope from (the SAME id the phone/extension/desktop use), so we keep it.
   let email = '';
   let uid = '';
+  let name = '';
   let avatar = '';
   try {
     const infoRes = await fetch(`${TIEDDR_API_BASE}/v1/oauth/userinfo`, {
@@ -762,10 +783,11 @@ async function exchangeTieddrCode(code, verifier) {
       const info = await infoRes.json();
       email = info.email || '';
       uid = info.sub || '';
+      name = info.name || '';
       // Build a Gravatar URL from the email hash — widely used default avatar
       if (email) {
         const emailHash = crypto.createHash('md5').update(email.trim().toLowerCase()).digest('hex');
-        avatar = `https://www.gravatar.com/avatar/${emailHash}?d=mp&s=128`;
+        avatar = info.avatarId ? `https://cloud.appwrite.io/v1/storage/buckets/avatars/files/${encodeURIComponent(info.avatarId)}/view?project=${TIEDDR_APPWRITE_PROJECT_ID}` : '';
       }
     }
   } catch (_) { /* profile display is best-effort; the token itself is what matters */ }
@@ -774,7 +796,7 @@ async function exchangeTieddrCode(code, verifier) {
     token: tokenData.access_token,
     refreshToken: tokenData.refresh_token || null,
     uid, email,
-    name: email ? email.split('@')[0] : 'Tieddr account',
+    name: name || 'Tieddr account',
     avatar
   };
 }
@@ -800,14 +822,49 @@ async function refreshTieddrToken(account) {
       token: data.access_token,
       refreshToken: data.refresh_token || account.refreshToken
     };
-    accountStore.set('account', updated);
-    return updated;
+    return refreshTieddrProfile(updated);
   } catch (_) {
     return null;
   }
 }
 
-ipcMain.handle('get-account', () => accountStore.get('account'));
+ipcMain.handle('get-account', async () => {
+  const account = accountStore.get('account');
+  const refreshed = await refreshTieddrProfile(account);
+  if (refreshed !== account) send('account-changed', refreshed);
+  return refreshed;
+});
+
+function compareVersions(a, b) {
+  const pa = String(a).replace(/^v/, '').split('.').map(Number);
+  const pb = String(b).replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+ipcMain.handle('check-for-updates', async () => {
+  const currentVersion = app.getVersion();
+  try {
+    const res = await fetch(FLOWR_RELEASES_API, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': `Flowr/${currentVersion}` } });
+    if (!res.ok) throw new Error(`Update service returned ${res.status}`);
+    const release = await res.json();
+    const latestVersion = String(release.tag_name || '').replace(/^v/, '');
+    const assets = Array.isArray(release.assets) ? release.assets : [];
+    const asset = assets.find(a => /installer.*\.exe$/i.test(a.name)) || assets.find(a => /windows.*\.zip$/i.test(a.name));
+    return { ok: true, currentVersion, latestVersion, available: compareVersions(latestVersion, currentVersion) > 0, releaseUrl: release.html_url, downloadUrl: asset?.browser_download_url || release.html_url, notes: release.body || '', publishedAt: release.published_at };
+  } catch (error) {
+    return { ok: false, currentVersion, error: error?.message || 'Could not check for updates' };
+  }
+});
+
+ipcMain.handle('open-external', (_event, url) => {
+  if (!/^https:\/\//i.test(String(url || ''))) return false;
+  void shell.openExternal(url);
+  return true;
+});
 
 ipcMain.handle('tieddr-sign-in', () => new Promise((resolve) => {
   if (authWin && !authWin.isDestroyed()) { authWin.focus(); return resolve(accountStore.get('account')); }
