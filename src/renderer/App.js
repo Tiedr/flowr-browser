@@ -186,7 +186,11 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
 
   // Resolve the start page background.
   const bgPreset = START_BGS.find(b => b.id === (settings.startBackground || 'none'));
-  const bgStyle = bgPreset && bgPreset.css ? { background: bgPreset.css } : {};
+  const bgStyle = bgPreset && bgPreset.css
+    ? { background: bgPreset.css }
+    : { background: theme.id === 'aurora' || theme.id === 'linen'
+      ? 'radial-gradient(circle at 50% 18%, rgba(122,165,31,0.14), transparent 34%), linear-gradient(145deg, #fafbf8 0%, #f1f3ed 48%, #e7ebe1 100%)'
+      : 'radial-gradient(circle at 50% 16%, rgba(135,185,40,0.16), transparent 32%), linear-gradient(145deg, #171b18 0%, #0f1110 52%, #090b0a 100%)' };
 
   // Determine if the background is light or dark for contrast.
   const isLightBg = !bgPreset || bgPreset.id === 'none' ? (theme.id === 'aurora' || theme.id === 'linen')
@@ -195,7 +199,7 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
   return (
     <ScrollView style={[s.start, { backgroundColor: theme.bg }]} contentContainerStyle={s.startIn}>
       {/* Background layer */}
-      {bgPreset && bgPreset.css ? <View style={[s.startBg, bgStyle]} pointerEvents="none" /> : null}
+      <View style={[s.startBg, bgStyle]} pointerEvents="none" />
 
       {/* Profile card — shown when signed in */}
       {account ? (
@@ -1515,21 +1519,15 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     wv.setAttribute('partition', incognito ? 'flow-incognito' : 'persist:flow-main');
     wv.setAttribute('webpreferences', 'contextIsolation=yes sandbox=no');
 
-    wv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;display:block;';
+    // Electron sizes <webview> guests from the element's native bounds. Do not
+    // apply CDP device emulation here: it can retain a stale viewport height
+    // after maximize/restore and render a page as a short horizontal strip.
+    wv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;min-width:100%;min-height:100%;border:none;display:block;background:#ffffff;';
 
     host.appendChild(wv);
     webviewsRef.current.set(tab.id, wv);
 
     const h = () => handlersRef.current;
-
-    const forceViewport = () => {
-      try {
-        const r = host.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) {
-          window.electron.ipcRenderer.send('set-webview-viewport', wv.getWebContentsId(), r.width, r.height);
-        }
-      } catch (_) {}
-    };
 
     let loaded = false;
     const applySrc = () => {
@@ -1565,33 +1563,27 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     const onNewWin = (e, url) => { e.preventDefault(); if (url) h().newTab(url); };
     const onDomReady = () => {
       try { h().register(wv.getWebContentsId()); } catch (_) {}
-      forceViewport();
     };
-    const onStopLoadViewport = () => { onStopLoad(); forceViewport(); };
 
     wv.addEventListener('did-navigate', onNav);
     wv.addEventListener('did-navigate-in-page', onNav);
     wv.addEventListener('page-title-updated', onTitle);
     wv.addEventListener('page-favicon-updated', onFavicon);
     wv.addEventListener('did-start-loading', onStartLoad);
-    wv.addEventListener('did-stop-loading', onStopLoadViewport);
+    wv.addEventListener('did-stop-loading', onStopLoad);
     wv.addEventListener('found-in-page', onFound);
     wv.addEventListener('did-fail-load', onFail);
     wv.addEventListener('context-menu', onCtx);
     wv.addEventListener('new-window', onNewWin);
     wv.addEventListener('dom-ready', onDomReady);
 
-    const ro = new ResizeObserver(forceViewport);
-    ro.observe(host);
-
     return () => {
-      ro.disconnect();
       wv.removeEventListener('did-navigate', onNav);
       wv.removeEventListener('did-navigate-in-page', onNav);
       wv.removeEventListener('page-title-updated', onTitle);
       wv.removeEventListener('page-favicon-updated', onFavicon);
       wv.removeEventListener('did-start-loading', onStartLoad);
-      wv.removeEventListener('did-stop-loading', onStopLoadViewport);
+      wv.removeEventListener('did-stop-loading', onStopLoad);
       wv.removeEventListener('found-in-page', onFound);
       wv.removeEventListener('did-fail-load', onFail);
       wv.removeEventListener('context-menu', onCtx);
@@ -1623,7 +1615,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     if (wv && preloadUrl) wv.setAttribute('preload', preloadUrl);
   }, [preloadUrl]);
 
-  return <div ref={hostRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', pointerEvents: active ? 'auto' : 'none' }} />;
+  return <div ref={hostRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
 }
 
 function SidePanelHost({ info, preloadUrl, contentRef }) {

@@ -66,7 +66,7 @@ const SETTINGS_DEFAULTS = {
   uiScale: 1,
   language: 'en',
   accentColor: '',
-  startBackground: 'none'
+  startBackground: 'gradient-midnight'
 };
 const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
 const downloadsStore = new Store('downloads', { downloads: [] });
@@ -510,23 +510,6 @@ ipcMain.on('add-history', (event, url, title) => addToHistory(url, title));
 ipcMain.on('register-webview', (event, id) => {
   const wc = webContents.fromId(id);
   if (wc && !wc.isDestroyed()) attachShortcuts(wc);
-});
-
-// Force guest viewport to match desired dimensions via CDP.
-// Called after dom-ready so the guest webContents exists.
-ipcMain.on('set-webview-viewport', async (event, wcId, width, height) => {
-  const wc = webContents.fromId(wcId);
-  if (!wc || wc.isDestroyed() || width <= 0 || height <= 0) return;
-  try {
-    if (!wc.debugger.isAttached()) await wc.debugger.attach('1.3');
-    await wc.debugger.send('Emulation.setDeviceMetricsOverride', {
-      width: Math.round(width),
-      height: Math.round(height),
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
-    wc.debugger.detach();
-  } catch (_) {}
 });
 
 // Commands that need the main process (dialogs, reader mode, save-page). The
