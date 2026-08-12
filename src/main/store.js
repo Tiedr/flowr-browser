@@ -51,16 +51,18 @@ class Store {
     this._timer = null;
     if (!this._dirty) return;
     this._dirty = false;
-    try {
-      fs.writeFileSync(this.path, JSON.stringify(this.data));
-    } catch (error) {
-      console.error(`Error writing store ${this.path}:`, error);
-    }
+    fs.writeFile(this.path, JSON.stringify(this.data), (error) => {
+      if (error) console.error(`Error writing store ${this.path}:`, error);
+    });
   }
 
   flush() {
     if (this._timer) { clearTimeout(this._timer); }
-    this._flush();
+    this._timer = null;
+    if (!this._dirty) return;
+    this._dirty = false;
+    try { fs.writeFileSync(this.path, JSON.stringify(this.data)); }
+    catch (error) { console.error(`Error writing store ${this.path}:`, error); }
   }
 }
 

@@ -1565,6 +1565,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     requestAnimationFrame(applySrc);
 
     const onNav = (e, url) => { if (url && url !== 'about:blank') { h().updateUrl(tab.id, url); try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {} h().addHistory(url, ''); } };
+    const onNavInPage = (e, url) => { if (url && url !== 'about:blank') h().updateUrl(tab.id, url); };
     const onTitle = (e, title) => { if (title) h().updateTitle(tab.id, title); };
     const onFavicon = (e, favicons) => { if (favicons && favicons[0]) h().updateFavicon(tab.id, favicons[0]); };
     const onStartLoad = () => h().updateLoading(tab.id, true);
@@ -1593,7 +1594,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     };
 
     wv.addEventListener('did-navigate', onNav);
-    wv.addEventListener('did-navigate-in-page', onNav);
+    wv.addEventListener('did-navigate-in-page', onNavInPage);
     wv.addEventListener('page-title-updated', onTitle);
     wv.addEventListener('page-favicon-updated', onFavicon);
     wv.addEventListener('did-start-loading', onStartLoad);
@@ -1607,7 +1608,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     return () => {
       resizeObserver.disconnect();
       wv.removeEventListener('did-navigate', onNav);
-      wv.removeEventListener('did-navigate-in-page', onNav);
+      wv.removeEventListener('did-navigate-in-page', onNavInPage);
       wv.removeEventListener('page-title-updated', onTitle);
       wv.removeEventListener('page-favicon-updated', onFavicon);
       wv.removeEventListener('did-start-loading', onStartLoad);
@@ -1623,7 +1624,11 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
   }, [tab.id, incognito]);
 
   useEffect(() => {
-    if (hostRef.current) hostRef.current.style.visibility = active ? 'visible' : 'hidden';
+    if (hostRef.current) {
+      hostRef.current.style.visibility = active ? 'visible' : 'hidden';
+      const wv = hostRef.current.firstChild;
+      try { if (wv?.getWebContentsId) ipc?.send('set-webview-active', wv.getWebContentsId(), active); } catch (_) {}
+    }
   }, [active]);
 
   const prevUrlRef = useRef(tab.url);
@@ -2051,10 +2056,10 @@ export default function App() {
   // Wire the webview event handlers so WebviewHost can route page events back
   // to this component's state. Assigned every render so closures stay fresh.
   const handlers = {
-    updateUrl: (id, url) => setTabs(v => v.map(t => t.id === id ? { ...t, url } : t)),
-    updateTitle: (id, title) => setTabs(v => v.map(t => t.id === id ? { ...t, title } : t)),
-    updateFavicon: (id, favicon) => setTabs(v => v.map(t => t.id === id ? { ...t, favicon } : t)),
-    updateLoading: (id, loading) => setTabs(v => v.map(t => t.id === id ? { ...t, loading } : t)),
+    updateUrl: (id, url) => setTabs(v => v.some(t => t.id === id && t.url !== url) ? v.map(t => t.id === id ? { ...t, url } : t) : v),
+    updateTitle: (id, title) => setTabs(v => v.some(t => t.id === id && t.title !== title) ? v.map(t => t.id === id ? { ...t, title } : t) : v),
+    updateFavicon: (id, favicon) => setTabs(v => v.some(t => t.id === id && t.favicon !== favicon) ? v.map(t => t.id === id ? { ...t, favicon } : t) : v),
+    updateLoading: (id, loading) => setTabs(v => v.some(t => t.id === id && t.loading !== loading) ? v.map(t => t.id === id ? { ...t, loading } : t) : v),
     findResult: (r) => setFindCount({ active: r?.activeMatchOrdinal || 0, matches: r?.matches || 0 }),
     addHistory: (url, title) => ipc?.send('add-history', url, title),
     contextMenu: (p) => openContext(p),

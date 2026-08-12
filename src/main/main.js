@@ -72,6 +72,7 @@ const SETTINGS_DEFAULTS = {
   startBackground: 'gradient-midnight'
 };
 const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
+if (settingsStore.get('hardwareAcceleration') === false) app.disableHardwareAcceleration();
 const downloadsStore = new Store('downloads', { downloads: [] });
 const extensionsStore = new Store('extensions', { extensions: [] });
 const accountStore = new Store('account', { account: null });
@@ -88,6 +89,7 @@ let adBlockerEnabled = settingsStore.get('adBlocker') !== false;
 let clipboardClearTimeout = null;
 
 const downloadItems = new Map();
+const downloadPersistAt = new Map();
 
 function initStores(profileId) {
   bookmarksStore = new Store(`profiles/${profileId}/bookmarks`, { bookmarks: [] });
@@ -448,6 +450,9 @@ function createWindow() {
     send('downloads-changed', initial);
 
     item.on('updated', (event, state) => {
+      const now = Date.now();
+      if (state !== 'interrupted' && now - (downloadPersistAt.get(downloadId) || 0) < 300) return;
+      downloadPersistAt.set(downloadId, now);
       const nextState = state === 'interrupted' ? 'interrupted' : item.isPaused() ? 'paused' : 'progressing';
       const downloads = persistDownload({
         id: downloadId,
@@ -472,6 +477,7 @@ function createWindow() {
         path: item.getSavePath() || ''
       });
       downloadItems.delete(downloadId);
+      downloadPersistAt.delete(downloadId);
       send('downloads-changed', downloads);
     });
   });
@@ -546,6 +552,13 @@ ipcMain.on('add-history', (event, url, title) => addToHistory(url, title));
 ipcMain.on('register-webview', (event, id) => {
   const wc = webContents.fromId(id);
   if (wc && !wc.isDestroyed()) attachShortcuts(wc);
+});
+
+ipcMain.on('set-webview-active', (_event, id, active) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return;
+  try { wc.setBackgroundThrottling(!active); } catch (_) {}
+  try { wc.setFrameRate(active ? 60 : 8); } catch (_) {}
 });
 
 // Commands that need the main process (dialogs, reader mode, save-page). The
