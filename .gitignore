@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release*/
+builder-cache/
+# Tieddr Vault local secret (Appwrite sync key) — never commit
+src/main/vault/config.local.js
+.env
+.env.*
+!.env.example

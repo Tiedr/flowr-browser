@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Browser</title>
+    <style>
+        html, body, #root {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #111827;
+            font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* Prevent body scroll, handle in app */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        /* react-native-web's flex:1 root needs a flex column container, otherwise
+           the app collapses to content height and empty areas reveal the page. */
+        #root { display: flex; flex-direction: column; }
+        ::selection { background: rgba(99, 139, 240, 0.28); }
+
+        /* Custom-skinned scrollbars for the app UI (settings, lists, menus). */
+        ::-webkit-scrollbar { width: 11px; height: 11px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(130, 142, 165, 0.4);
+            border-radius: 10px;
+            border: 3px solid transparent;
+            background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(130, 142, 165, 0.66); background-clip: padding-box; }
+        ::-webkit-scrollbar-corner { background: transparent; }
+
+        /* Theme-agnostic hover + press feedback for chrome controls. The attribute
+           selector out-specifies react-native-web's atomic classes, so it wins on
+           :hover without !important. Kept subtle — no bouncy scale. */
+        [data-hoverable] { transition: background-color .14s ease, opacity .14s ease; }
+        [data-hoverable]:hover { background-color: rgba(142, 152, 174, 0.09); }
+        [data-hoverable]:active { opacity: 0.72; }
+        [data-tab]:hover { background-color: rgba(142, 152, 174, 0.06); }
+        [data-danger]:hover { background-color: rgba(226, 90, 86, 0.13); }
+
+        /* Indeterminate loading sweep (page bar) + spinner (tab icon). */
+        @keyframes flowLoad { 0% { transform: translateX(-100%); } 50% { transform: translateX(60%); } 100% { transform: translateX(320%); } }
+        [data-load] { animation: flowLoad 1.15s cubic-bezier(.65,.05,.36,1) infinite; will-change: transform; }
+        @keyframes flowSpin { to { transform: rotate(360deg); } }
+        [data-spin] { animation: flowSpin .8s linear infinite; }
+        /* A new tab grows out of the strip: it opens from ~zero width and pushes
+           the others aside (flex-grow + min-width interpolate). React keys mean
+           only the freshly-mounted tab animates; fill:backwards so it settles
+           into its normal flex share with no jump. */
+        @keyframes flowTabIn { from { flex-grow: 0.02; min-width: 20px; opacity: 0; } to { flex-grow: 1; min-width: 44px; opacity: 1; } }
+        [data-tabenter] { animation: flowTabIn .26s cubic-bezier(.22,1,.3,1) backwards; }
+        [data-tabid] { transition: transform .16s cubic-bezier(.22,1,.3,1), box-shadow .16s ease; }
+        @media (prefers-reduced-motion: reduce) {
+            [data-hoverable], [data-tab], [data-tabid] { transition: none; }
+            [data-load], [data-spin], [data-tabenter] { animation: none; }
+        }
+
+        /* Glassmorphism base classes — applied via dataSet or inline styles */
+        .glass-light { backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%); }
+        .glass-medium { backdrop-filter: blur(24px) saturate(200%); -webkit-backdrop-filter: blur(24px) saturate(200%); }
+        .glass-heavy { backdrop-filter: blur(32px) saturate(220%); -webkit-backdrop-filter: blur(32px) saturate(220%); }
+        /* Subtle noise texture overlay for glass surfaces */
+        .glass-noise::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            opacity: 0.03;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 128px 128px;
+        }
+        /* Glow ring for focused/active glass elements */
+        .glass-glow { box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.3); }
+        /* Entrance animation for glass panels */
+        @keyframes glassIn { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        [data-glass-in] { animation: glassIn .28s cubic-bezier(.22,1,.3,1) backwards; }
+        /* Tab closing animation — slide out and fade */
+        @keyframes tabClose { 0% { opacity: 1; transform: scaleX(1); max-width: 200px; margin-right: 3px; } 100% { opacity: 0; transform: scaleX(0.1); max-width: 0; margin-right: 0; padding: 0; border-width: 0; } }
+        [data-tabclosing] { animation: tabClose .22s cubic-bezier(.4,0,1,1) forwards; pointer-events: none; overflow: hidden; }
+        @keyframes suggestionFadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) { .suggestion-item { transition: none; } }
+        
+        /* Extension dropdown styles */
+        .ext-dropdown { position: absolute; top: 100%; right: 0; width: 280px; border-radius: 10px; border: 1px solid; box-shadow: 0 12px 40px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; animation: suggestionFadeIn 0.2s ease; }
+        .ext-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid; }
+        .ext-dropdown-title { font-size: 13px; font-weight: 600; }
+        .ext-dropdown-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; transition: background-color 0.1s ease; }
+        .ext-dropdown-item-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+        .ext-dropdown-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .ext-dropdown-item-info { flex: 1; min-width: 0; }
+        .ext-dropdown-item-name { font-size: 13px; font-weight: 500; }
+        .ext-dropdown-item-desc { font-size: 11px; margin-top: 2px; }
+        .ext-dropdown-actions { display: flex; align-items: center; gap: 8px; }
+        .ext-dropdown-toggle { width: 28px; height: 16px; border-radius: 8px; position: relative; cursor: pointer; }
+        .ext-dropdown-toggle-dot { width: 12px; height: 12px; border-radius: 6px; position: absolute; top: 2px; left: 2px; transition: transform 0.15s ease; }
+        .ext-dropdown-action { padding: 4px; cursor: pointer; }
+        .ext-dropdown-footer { padding: 10px 14px; border-top: 1px solid; }
+        .ext-dropdown-footer-link { cursor: pointer; }
+        .ext-dropdown-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 14px; }
+        
+        /* Settings animations */
+        .settings-hero { display: flex; align-items: center; gap: 16px; padding: 24px 0; border-bottom: 1px solid; margin-bottom: 24px; animation: settingsFadeIn 0.3s ease; }
+        .settings-hero-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .settings-hero-title { font-size: 24px; font-weight: 700; }
+        .settings-hero-desc { font-size: 14px; margin-top: 4px; }
+        .settings-card { border-radius: 12px; border: 1px solid; margin-bottom: 16px; overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .settings-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+        .settings-card-header { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid; }
+        .settings-card-title { font-size: 15px; font-weight: 600; }
+        .settings-card-body { padding: 16px 20px; }
+        .settings-toggle { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid; }
+        .settings-toggle:last-child { border-bottom: none; }
+        .settings-toggle-info { flex: 1; }
+        .settings-toggle-label { font-size: 14px; font-weight: 500; }
+        .settings-toggle-detail { font-size: 12px; margin-top: 2px; }
+        .settings-toggle-switch { width: 40px; height: 22px; border-radius: 11px; position: relative; cursor: pointer; transition: background-color 0.2s ease; }
+        .settings-toggle-dot { width: 18px; height: 18px; border-radius: 9px; position: absolute; top: 2px; transition: transform 0.2s ease; }
+        @keyframes settingsFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>
