@@ -1,5 +1,5 @@
 #define MyAppName "Flowr"
-#define MyAppVersion "1.0.10"
+#define MyAppVersion "1.1.0"
 [Setup]
 AppId={{A12C0CB9-4DCE-4F43-A860-9E73B94A87F6}
 AppName={#MyAppName}
@@ -11,7 +11,7 @@ DefaultDirName={autopf}\Flowr
 DefaultGroupName=Flowr
 DisableProgramGroupPage=yes
 OutputDir=..\release_flowr_110
-OutputBaseFilename=Flowr-Installer-1.0.10
+OutputBaseFilename=Flowr-Installer-1.1.0
 SetupIconFile=..\release_flowr_110\.icon-ico\icon.ico
 UninstallDisplayIcon={app}\Flowr.exe
 Compression=lzma2/fast
@@ -63,7 +63,7 @@ begin
   Hero := TPanel.Create(WizardForm); Hero.Parent := WizardForm.WelcomePage;
   Hero.Align := alClient; Hero.Color := $0D0F0F; Hero.BevelOuter := bvNone;
   AddCopy(BrandText, Hero, 'FLOWR', 34, 24, 150, 26, 14, $FFFFFF, True);
-  AddCopy(VersionText, Hero, 'TIEDDR  /  1.0.10', Hero.Width - 180, 27, 150, 20, 9, $8D9692, True);
+  AddCopy(VersionText, Hero, 'TIEDDR  /  1.1.0', Hero.Width - 180, 27, 150, 20, 9, $8D9692, True);
   AddCopy(Kicker, Hero, 'BROWSER FOR YOUR FLOW', 42, 110, 300, 22, 9, $51FFCA, True);
   AddCopy(Headline, Hero, 'Install' + #13#10 + 'Flowr.', 40, 142, 310, 106, 31, $FFFFFF, True);
   AddCopy(BodyCopy, Hero, 'A calmer, faster browser with your Tieddr world already connected.', 43, 258, 292, 60, 11, $AAB2AF, False);

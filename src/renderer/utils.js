@@ -3,13 +3,23 @@ import { Image } from 'react-native';
 import { Shield, Settings, Bookmark, FileText, History, Download, Puzzle, Globe } from 'lucide-react';
 import logo from '../../flowricondark.png';
 import vaultLogo from '../../vaultmark.png';
+import bgAbstract from '../assets/backgrounds/abstract-glass.png';
+import bgNature from '../assets/backgrounds/nature-aurora.png';
+import bgBirds from '../assets/backgrounds/birds-rainforest.png';
+import bgHeroes from '../assets/backgrounds/original-guardians.png';
+import spaceLogo from '../assets/tieddr/space.png';
+import tieddrVaultLogo from '../assets/tieddr/vault.png';
+import mavisLogo from '../assets/tieddr/mavis.png';
+import pagesLogo from '../assets/tieddr/pages.png';
+import momentsLogo from '../assets/tieddr/moments.png';
+import kraftiLogo from '../assets/tieddr/krafti.png';
 
 const ipc = window.electron?.ipcRenderer;
 
 const CHROME_H = 92;
 const BANNER_H = 60;
 const FIND_H = 48;
-const APP_VERSION = '1.0.10';
+const APP_VERSION = '1.1.0';
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const T_BG = { transitionProperty: 'background-color, border-color, opacity', transitionDuration: '160ms', transitionTimingFunction: EASE };
 const HOVER = { hoverable: '1' };
@@ -37,6 +47,10 @@ const START_BGS = [
   { id: 'gradient-sunset', label: 'Sunset', thumb: null, css: 'linear-gradient(135deg, #1e1b4b 0%, #be185d 50%, #f97316 100%)' },
   { id: 'gradient-snow', label: 'Snow', thumb: null, css: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)' },
   { id: 'gradient-paper', label: 'Paper', thumb: null, css: 'linear-gradient(135deg, #faf8f5 0%, #f0ece4 50%, #e8e0d0 100%)' },
+  { id: 'flowr-abstract', label: 'Glass Current', thumb: bgAbstract, css: `linear-gradient(rgba(0,0,0,.08), rgba(0,0,0,.28)), url(${bgAbstract}) center/cover no-repeat` },
+  { id: 'flowr-nature', label: 'Aurora Lake', thumb: bgNature, css: `linear-gradient(rgba(0,0,0,.08), rgba(0,0,0,.24)), url(${bgNature}) center/cover no-repeat` },
+  { id: 'flowr-birds', label: 'Rainforest Birds', thumb: bgBirds, css: `linear-gradient(rgba(0,0,0,.08), rgba(0,0,0,.28)), url(${bgBirds}) center/cover no-repeat` },
+  { id: 'flowr-heroes', label: 'Original Guardians', thumb: bgHeroes, css: `linear-gradient(rgba(0,0,0,.08), rgba(0,0,0,.3)), url(${bgHeroes}) center/cover no-repeat` },
   // Photo backgrounds (Unsplash free images)
   { id: 'photo-mountain', label: 'Mountain', thumb: null, css: 'linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80) center/cover no-repeat' },
   { id: 'photo-aurora', label: 'Northern Lights', thumb: null, css: 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.4)), url(https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=1920&q=80) center/cover no-repeat' },
@@ -56,7 +70,7 @@ function resolveTheme(themeId, accentId) {
 }
 
 const THEMES = {
-  flow: { id: 'flow', name: 'Flow', desc: 'Signature black and white.', bg: '#0f0f0f', chrome: '#171717', glass: '#1a1a1a', strong: '#222222', panel: '#181818', soft: '#141414', text: '#ededed', muted: '#888888', faint: '#555555', border: '#2a2a2a', accent: '#e0e0e0', accentSoft: '#1a1a1a', success: '#34d399', danger: '#f87171' },
+  flow: { id: 'flow', name: 'Flowr', desc: 'Signature black and white.', bg: '#0f0f0f', chrome: '#171717', glass: '#1a1a1a', strong: '#222222', panel: '#181818', soft: '#141414', text: '#ededed', muted: '#888888', faint: '#555555', border: '#2a2a2a', accent: '#e0e0e0', accentSoft: '#1a1a1a', success: '#34d399', danger: '#f87171' },
   graphite: { id: 'graphite', name: 'Graphite', desc: 'Quiet, near-black focus.', bg: '#0b0d11', chrome: '#0f1116', glass: '#15181f', strong: '#1a1e26', panel: '#111318', soft: '#0e1015', text: '#e7e9ec', muted: '#878d97', faint: '#565b64', border: '#1e222a', accent: '#5c8cff', accentSoft: '#151b28', success: '#43c98a', danger: '#f06a71' },
   aurora: { id: 'aurora', name: 'Aurora', desc: 'Clean, quiet light.', bg: '#f6f7f9', chrome: '#fbfbfc', glass: '#ffffff', strong: '#ffffff', panel: '#ffffff', soft: '#f0f1f4', text: '#1b1e24', muted: '#646a74', faint: '#9aa0aa', border: '#e7e9ed', accent: '#3268e6', accentSoft: '#eef2fd', success: '#0e9d62', danger: '#d94a45' },
   linen: { id: 'linen', name: 'Linen', desc: 'Warm reading light.', bg: '#f4f1ea', chrome: '#f8f6f0', glass: '#fffdf9', strong: '#fffdf9', panel: '#fbf9f3', soft: '#efece4', text: '#232019', muted: '#6c655a', faint: '#a39b8d', border: '#e4dfd4', accent: '#7a5fe0', accentSoft: '#f0ecfb', success: '#0f7a54', danger: '#c04a3f' }
@@ -124,12 +138,12 @@ const TieddrMark = ({ size = 19, color = 'currentColor' }) => (
 const VaultMark = ({ height = 22, dark = false }) => <Image source={{ uri: vaultLogo }} style={{ height, width: height * (785 / 206), resizeMode: 'contain', filter: dark ? 'brightness(0) invert(1)' : undefined }} />;
 
 const TIEDDR_APPS = [
-  { name: 'Space', tagline: 'Bookmarks, notes, to-dos & clipboard.', url: 'https://space.tieddr.com', icon: 'https://account.tieddr.com/logos/space.png' },
-  { name: 'Vault', tagline: 'Passwords, sensitive info, two-factor codes.', url: 'https://vault.tieddr.com', icon: 'https://account.tieddr.com/logos/vault.png' },
-  { name: 'Mavis', tagline: 'Your private, helpful Tieddr assistant.', url: 'https://mavis.tieddr.com', icon: 'https://account.tieddr.com/logos/mavis.png' },
-  { name: 'Pages', tagline: 'A bio link page for all your links.', url: 'https://pages.tieddr.com' },
-  { name: 'Moments', tagline: 'Your photos and videos, all in one place.', url: 'https://moments.tieddr.com', icon: 'https://account.tieddr.com/logos/moments.png' },
-  { name: 'Krafti', tagline: 'A drag-and-drop app builder.', url: 'https://krafti.tieddr.com' }
+  { name: 'Space', tagline: 'Bookmarks, notes, to-dos & clipboard.', url: 'https://space.tieddr.com', icon: spaceLogo },
+  { name: 'Vault', tagline: 'Passwords, sensitive info, two-factor codes.', url: 'https://vault.tieddr.com', icon: tieddrVaultLogo },
+  { name: 'Mavis', tagline: 'Your private, helpful Tieddr assistant.', url: 'https://mavis.tieddr.com', icon: mavisLogo },
+  { name: 'Pages', tagline: 'A bio link page for all your links.', url: 'https://pages.tieddr.com', icon: pagesLogo },
+  { name: 'Moments', tagline: 'Your photos and videos, all in one place.', url: 'https://moments.tieddr.com', icon: momentsLogo },
+  { name: 'Krafti', tagline: 'A drag-and-drop app builder.', url: 'https://krafti.tieddr.com', icon: kraftiLogo }
 ];
 
 function SiteIcon({ url, favicon, theme, size = 18 }) {

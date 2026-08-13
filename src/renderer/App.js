@@ -248,9 +248,10 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
           { icon: Star, label: 'Bookmarks', page: 'bookmarks' },
           { icon: Clock, label: 'History', page: 'history' },
           { icon: Shield, label: 'Vault', page: 'vault' },
+          { icon: Sparkles, label: 'Mavis', page: 'mavis', url: 'https://mavis.tieddr.com' },
           { icon: Settings, label: 'Settings', page: 'settings' },
         ].map(a => (
-          <TouchableOpacity key={a.page} dataSet={HOVER} style={[s.startQuick, { backgroundColor: isLightBg ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', borderColor: isLightBg ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }]} {...GLASS_LIGHT} onPress={() => open(a.page)}>
+          <TouchableOpacity key={a.page} dataSet={HOVER} style={[s.startQuick, { backgroundColor: isLightBg ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', borderColor: isLightBg ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }]} {...GLASS_LIGHT} onPress={() => a.url ? go(a.url) : open(a.page)}>
             <a.icon size={16} color={isLightBg ? '#555' : '#999'} />
             <Text style={[s.startQuickLabel, { color: isLightBg ? '#555' : '#999' }]}>{a.label}</Text>
           </TouchableOpacity>
@@ -263,10 +264,10 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
         <StartMini title="Recent" action="Open history" onAction={() => open('history')} rows={history.slice(0, 4)} icon={Clock} empty="Visited pages will appear here." go={go} isLightBg={isLightBg} />
       </View>
 
-      {/* Flow branding */}
+      {/* Flowr branding */}
       <View style={s.startBranding}>
         <Brand size={18} radius={5} />
-        <Text style={[s.startBrandText, { color: isLightBg ? '#ccc' : '#444' }]}>Flow Browser</Text>
+        <Text style={[s.startBrandText, { color: isLightBg ? '#ccc' : '#444' }]}>Flowr Browser</Text>
       </View>
     </ScrollView>
   );
@@ -417,7 +418,7 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, men
         <I icon={Home} label="Home" onPress={home} theme={theme} />
       </View>
       <View style={s.urlWrap} ref={urlWrapRef}>
-        <View style={[s.box, { backgroundColor: theme.strong, borderColor: focused ? theme.accent : theme.border }, showInlineSuggestions && !showViewLive && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
+        <View style={[s.box, { backgroundColor: focused ? theme.glass : theme.strong, borderColor: theme.border }, showInlineSuggestions && !showViewLive && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
           {input.startsWith('https://') ? <Lock size={14} color={theme.success} /> : <Search size={14} color={theme.faint} />}
           <TextInput ref={urlRef} style={[s.url, { color: theme.text }]} value={input} onChangeText={v => { setInput(v); setSelIdx(-1); }}
             onFocus={() => setFocused(true)} onBlur={() => { if (!clickingSuggestion.current) setTimeout(() => setFocused(false), 150); }}
@@ -711,8 +712,8 @@ function StoreBanner({ onGet, busy, theme }) {
     <View style={[s.banner, { backgroundColor: theme.accentSoft, borderBottomColor: theme.border }]}>
       <View style={[s.bicon, { backgroundColor: theme.strong }]}><Puzzle size={17} color={theme.accent} /></View>
       <View style={s.rb}>
-        <Text style={[s.rt, { color: theme.text }]} numberOfLines={1}>Add this Chrome extension to Flow</Text>
-        <Text style={[s.rs, { color: theme.muted }]} numberOfLines={1}>Flow downloads and unpacks it for you — nothing to do manually.</Text>
+        <Text style={[s.rt, { color: theme.text }]} numberOfLines={1}>Add this Chrome extension to Flowr</Text>
+        <Text style={[s.rs, { color: theme.muted }]} numberOfLines={1}>Flowr downloads and unpacks it for you — nothing to do manually.</Text>
       </View>
       <TouchableOpacity style={[s.getBtn, { backgroundColor: theme.accent, opacity: busy ? 0.6 : 1 }]} disabled={busy} onPress={onGet}>
         {busy ? <RotateCcw size={15} color="#fff" /> : <Download size={15} color="#fff" />}
@@ -736,7 +737,7 @@ function ExtensionsPage({ items, acts, install, installStore, busy, remove, togg
       </View>
       <View style={[s.card, { backgroundColor: theme.panel, borderColor: theme.border }]}>
         <View style={s.cardHead}><Puzzle size={19} color={theme.accent} /><Text style={[s.pt, { color: theme.text }]}>Add from Chrome Web Store</Text></View>
-        <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Paste a Chrome Web Store link or extension ID. Flow fetches the extension, unpacks it in the background, and enables it — no manual download or folder picking.</Text>
+        <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Paste a Chrome Web Store link or extension ID. Flowr fetches the extension, unpacks it in the background, and enables it — no manual download or folder picking.</Text>
         <View style={[s.inline, { borderColor: theme.border }]}>
           <TextInput style={[s.inlineInput, { color: theme.text }]} placeholder="https://chromewebstore.google.com/detail/\u2026" placeholderTextColor={theme.faint} value={q} onChangeText={setQ} onSubmitEditing={add} autoCapitalize="none" editable={!busy} />
           <TouchableOpacity style={[s.small, { backgroundColor: theme.accent, opacity: busy ? 0.6 : 1 }]} disabled={!!busy} onPress={add}><Text style={s.smallText}>{busy ? 'Adding\u2026' : 'Get'}</Text></TouchableOpacity>
@@ -1014,7 +1015,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             <Toggle label="Smart copy" detail="Enhance copied content with formatting and context." value={!!settings.smartCopy} onPress={() => update({ smartCopy: !settings.smartCopy })} theme={theme} />
           </Card>
           <Card title="Default browser" icon={Globe} theme={theme}>
-            <Text style={[s.rs, { color: theme.muted, marginBottom: 10 }]}>Flow is your default browser.</Text>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 10 }]}>Flowr is your default browser.</Text>
             <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={() => ipc?.send('set-default-browser')}>
               <Globe size={16} color={theme.accent} />
               <Text style={[s.actionText, { color: theme.accent }]}>Set as default</Text>
@@ -1075,7 +1076,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             </TouchableOpacity>
           </Card>
           <Card title="Keyboard shortcuts" icon={Keyboard} theme={theme}>
-            <Text style={[s.rs, { color: theme.muted, marginBottom: 10 }]}>Customize keyboard shortcuts for Flow.</Text>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 10 }]}>Customize keyboard shortcuts for Flowr.</Text>
             <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={() => openPage('data')}>
               <Keyboard size={16} color={theme.accent} />
               <Text style={[s.actionText, { color: theme.accent }]}>Customize shortcuts</Text>
@@ -1085,9 +1086,9 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
       case 'system':
         return (<>
           <Card title="System" icon={Cpu} theme={theme}>
-            <Toggle label="Continue running background apps when Flow is closed" detail="Keep extensions and downloads active in the background." value={!!settings.background} onPress={() => update({ background: !settings.background })} theme={theme} />
-            <Toggle label="Use hardware acceleration when available" detail="Restart Flow to apply." value={settings.hardwareAcceleration !== false} onPress={() => update({ hardwareAcceleration: settings.hardwareAcceleration === false })} theme={theme} />
-            <Toggle label="Send usage statistics" detail="Help improve Flow by sending anonymous usage data." value={!!settings.sendStats} onPress={() => update({ sendStats: !settings.sendStats })} theme={theme} />
+            <Toggle label="Continue running background apps when Flowr is closed" detail="Keep extensions and downloads active in the background." value={!!settings.background} onPress={() => update({ background: !settings.background })} theme={theme} />
+            <Toggle label="Use hardware acceleration when available" detail="Restart Flowr to apply." value={settings.hardwareAcceleration !== false} onPress={() => update({ hardwareAcceleration: settings.hardwareAcceleration === false })} theme={theme} />
+            <Toggle label="Send usage statistics" detail="Help improve Flowr by sending anonymous usage data." value={!!settings.sendStats} onPress={() => update({ sendStats: !settings.sendStats })} theme={theme} />
           </Card>
         </>);
       case 'developer':
@@ -1116,7 +1117,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
         return (<>
           <Card title="Updates" icon={Rocket} theme={theme}>
             <Pick label="Update channel" values={['stable', 'beta', 'dev']} value={settings.updateChannel || 'stable'} format={v => ({ stable: 'Stable', beta: 'Beta (early features)', dev: 'Dev (nightly)' })[v]} onPick={v => update({ updateChannel: v })} theme={theme} />
-            <Toggle label="Check for updates automatically" detail="Flow checks for new versions on startup." value={settings.autoUpdate !== false} onPress={() => update({ autoUpdate: settings.autoUpdate === false })} theme={theme} />
+            <Toggle label="Check for updates automatically" detail="Flowr checks for new versions on startup." value={settings.autoUpdate !== false} onPress={() => update({ autoUpdate: settings.autoUpdate === false })} theme={theme} />
             <Toggle label="Background update downloads" detail="Download updates in the background and install on next restart." value={!!settings.backgroundUpdateDownload} onPress={() => update({ backgroundUpdateDownload: !settings.backgroundUpdateDownload })} theme={theme} />
             <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border, marginTop: 6 }]} onPress={checkUpdate} disabled={checkingUpdate}>
               <ArrowUpCircle size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>{checkingUpdate ? 'Checking…' : 'Check for updates now'}</Text>
@@ -1128,7 +1129,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             </View> : null}
           </Card>
           <Card title="Release notes" icon={BookOpen} theme={theme}>
-            <Text style={[s.rs, { color: theme.muted, lineHeight: 19 }]}>See what's new in Flow Browser.</Text>
+            <Text style={[s.rs, { color: theme.muted, lineHeight: 19 }]}>See what's new in Flowr Browser.</Text>
             <InfoRow label="Current version" value={APP_VERSION} theme={theme} />
             <InfoRow label="Engine" value="Electron 43 · Chromium 134" theme={theme} />
             <InfoRow label="Release date" value="August 2026" theme={theme} />
@@ -1150,11 +1151,11 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
         );
       case 'about':
         return (
-          <Card title="About Flow" icon={Info} theme={theme}>
+          <Card title="About Flowr" icon={Info} theme={theme}>
             <View style={s.about}>
               <View style={[s.mark, { backgroundColor: theme.strong, borderColor: theme.border, marginBottom: 0 }]}><Brand size={40} radius={11} /></View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[s.rt, { color: theme.text, fontSize: 18 }]}>Flow Browser</Text>
+                <Text style={[s.rt, { color: theme.text, fontSize: 18 }]}>Flowr Browser</Text>
                 <Text style={[s.rs, { color: theme.muted }]}>Version {APP_VERSION}</Text>
                 <Text style={[s.rs, { color: theme.faint, marginTop: 6, lineHeight: 18 }]}>A calm, premium browser built on Electron. Part of the Tieddr ecosystem.</Text>
               </View>
@@ -1179,7 +1180,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
   return (
     <View style={s.setWrap}>
       <View style={[s.setSide, { backgroundColor: theme.chrome + 'cc', borderRightColor: theme.border + '60' }]} {...GLASS_HEAVY}>
-        <View style={s.setBrand}><Brand size={22} radius={6} /><Text style={[s.setBrandText, { color: theme.text }]}>Flow</Text></View>
+        <View style={s.setBrand}><Brand size={22} radius={6} /><Text style={[s.setBrandText, { color: theme.text }]}>Flowr</Text></View>
         {account ? (
           <View style={[s.setAccountBar, { backgroundColor: theme.accentSoft, borderColor: theme.border }]}>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -2084,6 +2085,7 @@ export default function App() {
     ipc.invoke('get-view-preload').then(url => setPreloadUrl(url || '')).catch(() => setPreloadUrl(''));
     ipc.on('request-new-tab', u => openWebTab(u));
     ipc.on('downloads-changed', x => setDownloads(x || []));
+    ipc.on('history-changed', x => setHistory(x || []));
     // Pushed by a background Tieddr Space sync (on sign-in, on startup if
     // already signed in, and every ~15 min) — not tied to a user action, so
     // it needs its own listener rather than piggybacking on load()'s explicit
@@ -2177,7 +2179,7 @@ export default function App() {
     setInstalling(true);
     try {
       const r = await ipc.invoke('install-store-extension', idOrUrl);
-      if (r?.ok) { setExtensions(r.extensions || []); refreshExtActs(); openPage('extensions'); showDialog({ title: 'Extension added', message: `${r.name} is installed and enabled in Flow.` }); }
+      if (r?.ok) { setExtensions(r.extensions || []); refreshExtActs(); openPage('extensions'); showDialog({ title: 'Extension added', message: `${r.name} is installed and enabled in Flowr.` }); }
       else showDialog({ title: 'Could not add extension', message: r?.error || 'The extension could not be installed.' });
     } catch (e) { showDialog({ title: 'Could not add extension', message: e.message }); }
     finally { setInstalling(false); }
@@ -2186,7 +2188,7 @@ export default function App() {
     title: 'Clear browsing data?', message: 'This clears cache, cookies, site data, and history for this profile. Bookmarks are kept.',
     actions: [{ label: 'Cancel', action: null }, { label: 'Clear data', primary: true, action: { dialog: 'clear-data' } }]
   });
-  const setDefault = async () => { const ok = await ipc.invoke('set-default-browser'); showDialog({ title: ok ? 'Request sent' : 'Could not set default', message: ok ? 'Flow asked Windows to handle web links. You may need to confirm in Windows settings.' : 'Windows blocked the change. Set Flow as default from Windows Settings → Apps → Default apps.' }); };
+  const setDefault = async () => { const ok = await ipc.invoke('set-default-browser'); showDialog({ title: ok ? 'Request sent' : 'Could not set default', message: ok ? 'Flowr asked Windows to handle web links. You may need to confirm in Windows settings.' : 'Windows blocked the change. Set Flowr as default from Windows Settings → Apps → Default apps.' }); };
   const chooseDownloads = async () => { const p = await ipc.invoke('choose-download-path'); setSettings(v => ({ ...v, downloadPath: p })); };
   const reset = () => showDialog({
     title: 'Restore default settings?', message: 'Theme, search engine, privacy, and all preferences return to defaults. Bookmarks and history are kept.',
@@ -2249,11 +2251,11 @@ export default function App() {
         />
       )}
       <View style={[s.content, { height: 'calc(100vh - ' + viewTop + 'px)' }]} ref={contentRef}>
+        {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank').map(t => (
+          <WebviewHost key={t.id} tab={t} active={isWeb && t.id === activeId} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
+        ))}
         {isWeb ? (
           <>
-            {tabs.filter(t => t.kind === 'web' && !(t.id === activeId && isStart)).map(t => (
-              <WebviewHost key={t.id} tab={t} active={t.id === activeId} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
-            ))}
             {isStart ? (
               <View style={[s.startLayer, { backgroundColor: theme.bg }]}>
                 <Start go={go} open={openPage} bookmarks={bookmarks} history={history} account={account} settings={settings} theme={theme} />
@@ -2265,9 +2267,14 @@ export default function App() {
               </View>
             )}
           </>
-        ) : tab.kind === 'settings'
-          ? <SettingsPage settings={settings} profiles={profiles} active={activeProfile} update={update} createProfile={createProfile} switchProfile={switchProfile} openPage={openPage} go={go} clearData={clearData} setDefault={setDefault} chooseDownloads={chooseDownloads} reset={reset} account={account} onSignIn={signIn} onSignOut={signOut} passwords={passwords} onRevealPw={revealPw} onCopyPw={copyPw} onDeletePw={deletePw} pwEncAvail={pwEncAvail} theme={theme} biometricAvailable={biometricAvailable} changeVaultPin={changeVaultPin} />
-          : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[tab.kind]}</ScrollView>}
+        ) : null}
+        {tabs.filter(t => t.kind !== 'web').map(t => (
+          <View key={t.id} style={[StyleSheet.absoluteFill, { display: t.id === activeId ? 'flex' : 'none', backgroundColor: theme.bg }]}>
+            {t.kind === 'settings'
+              ? <SettingsPage settings={settings} profiles={profiles} active={activeProfile} update={update} createProfile={createProfile} switchProfile={switchProfile} openPage={openPage} go={go} clearData={clearData} setDefault={setDefault} chooseDownloads={chooseDownloads} reset={reset} account={account} onSignIn={signIn} onSignOut={signOut} passwords={passwords} onRevealPw={revealPw} onCopyPw={copyPw} onDeletePw={deletePw} pwEncAvail={pwEncAvail} theme={theme} biometricAvailable={biometricAvailable} changeVaultPin={changeVaultPin} />
+              : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
+          </View>
+        ))}
         {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} /> : null}
         {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
       </View>

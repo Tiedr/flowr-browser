@@ -208,6 +208,36 @@ function send(channel, ...args) {
   }
 }
 
+function createBrandedPopup(url) {
+  if (!/^https?:\/\//i.test(url || '')) return;
+  const popup = new BrowserWindow({
+    width: 1060,
+    height: 760,
+    minWidth: 520,
+    minHeight: 420,
+    show: false,
+    title: `Flowr — ${new URL(url).hostname}`,
+    icon: path.join(__dirname, '../../flowricondark.png'),
+    backgroundColor: '#111111',
+    webPreferences: {
+      session: browsingSession || session.defaultSession,
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false
+    }
+  });
+  popup.setMenuBarVisibility(false);
+  popup.once('ready-to-show', () => popup.show());
+  popup.webContents.setWindowOpenHandler(({ url: childUrl }) => {
+    createBrandedPopup(childUrl);
+    return { action: 'deny' };
+  });
+  popup.webContents.on('page-title-updated', (_event, title) => {
+    popup.setTitle(title ? `${title} — Flowr` : 'Flowr');
+  });
+  popup.loadURL(url);
+}
+
 function searchUrl(query) {
   const engine = settingsStore.get('searchEngine') || 'google';
   const map = {
@@ -359,7 +389,9 @@ function addToHistory(url, title) {
   if (INCOGNITO || !url || url === 'about:blank') return;
   const history = historyStore.get('history') || [];
   const newItem = { url, title: title || url, date: new Date().toISOString() };
-  historyStore.set('history', [newItem, ...history.filter((item) => item.url !== url)].slice(0, 1000));
+  const next = [newItem, ...history.filter((item) => item.url !== url)].slice(0, 1000);
+  historyStore.set('history', next);
+  send('history-changed', next);
 }
 
 async function loadStoredExtensions() {
@@ -571,7 +603,7 @@ ipcMain.on('register-webview', (event, id) => {
   if (wc && !wc.isDestroyed()) {
     attachShortcuts(wc);
     wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) send('request-new-tab', url);
+      if (/^https?:\/\//i.test(url)) createBrandedPopup(url);
       return { action: 'deny' };
     });
   }
@@ -1236,6 +1268,7 @@ ipcMain.handle('get-history', () => historyStore.get('history') || []);
 
 ipcMain.handle('clear-history', () => {
   historyStore.set('history', []);
+  send('history-changed', []);
   return [];
 });
 

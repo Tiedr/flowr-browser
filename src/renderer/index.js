@@ -11,7 +11,7 @@ class ErrorBoundary extends React.Component {
     return { hasError: true, error };
   }
   componentDidCatch(error, info) {
-    console.error('Flow renderer error:', error, info?.componentStack);
+    console.error('Flowr renderer error:', error, info?.componentStack);
   }
   render() {
     if (this.state.hasError) {
@@ -20,7 +20,7 @@ class ErrorBoundary extends React.Component {
           <div style={{ fontSize: 40, marginBottom: 16 }}>&#9888;</div>
           <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 8px' }}>Something went wrong</h2>
           <p style={{ fontSize: 14, color: '#646a74', margin: '0 0 20px', maxWidth: 400 }}>{this.state.error?.message || 'An unexpected error occurred.'}</p>
-          <button onClick={() => window.location.reload()} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#3268e6', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Reload Flow</button>
+          <button onClick={() => window.location.reload()} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#3268e6', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Reload Flowr</button>
         </div>
       );
     }
