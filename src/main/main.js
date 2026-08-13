@@ -127,6 +127,19 @@ initStores(currentProfileId);
 let browsingSession = null;
 
 function configureSession(ses) {
+  // Present as the Chromium browser engine we actually embed. Many web apps
+  // reject Electron's default UA even though the page APIs are compatible.
+  const chromeMajor = String(process.versions.chrome || '142.0.0.0').split('.')[0];
+  const compatibleUA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`;
+  ses.setUserAgent(compatibleUA, 'en-US,en;q=0.9');
+  ses.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    details.requestHeaders['User-Agent'] = compatibleUA;
+    // Avoid Electron-specific client-hint brands triggering unsupported-browser gates.
+    details.requestHeaders['sec-ch-ua'] = `"Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}", "Not_A Brand";v="99"`;
+    details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
+    details.requestHeaders['sec-ch-ua-mobile'] = '?0';
+    callback({ requestHeaders: details.requestHeaders });
+  });
   // Built-in ad blocker: blocks requests to known ad/tracking domains.
   // Uses a curated list of common ad networks, trackers, and telemetry
   // endpoints. This runs as a webRequest filter before extensions get a chance
@@ -174,7 +187,8 @@ function configureSession(ses) {
   const GRANTED_PERMISSIONS = new Set([
     'notifications', 'storage', 'tabs', 'contextMenus', 'cookies',
     'webNavigation', 'webRequest', 'management', 'alarms',
-    'idle', 'clipboardRead', 'clipboardWrite', 'geolocation',
+    'idle', 'clipboardRead', 'clipboardWrite', 'geolocation', 'media',
+    'fullscreen', 'pointerLock', 'midi', 'midiSysex', 'display-capture',
     'bookmarks', 'history', 'downloads', 'topSites',
     'browsingData', 'privacy', 'sessions', 'favicon',
     'search', 'identity', 'power', 'systemPreferences',
@@ -185,6 +199,7 @@ function configureSession(ses) {
     // Auto-grant safe permissions; prompt-style approve for known ones
     callback(GRANTED_PERMISSIONS.has(permission));
   });
+  ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission));
 }
 
 function send(channel, ...args) {
@@ -484,7 +499,9 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  browsingSession = INCOGNITO ? session.fromPartition('flow-incognito') : session.defaultSession;
+  // Must be the exact same partition used by renderer webviews. Configuring
+  // defaultSession does not affect <webview partition="persist:flow-main">.
+  browsingSession = INCOGNITO ? session.fromPartition('flow-incognito') : session.fromPartition('persist:flow-main');
   configureSession(browsingSession);
   if (!INCOGNITO) await loadStoredExtensions();
   createWindow();
@@ -551,7 +568,13 @@ ipcMain.on('add-history', (event, url, title) => addToHistory(url, title));
 // keyboard shortcuts for when focus is inside the page.
 ipcMain.on('register-webview', (event, id) => {
   const wc = webContents.fromId(id);
-  if (wc && !wc.isDestroyed()) attachShortcuts(wc);
+  if (wc && !wc.isDestroyed()) {
+    attachShortcuts(wc);
+    wc.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) send('request-new-tab', url);
+      return { action: 'deny' };
+    });
+  }
 });
 
 ipcMain.on('set-webview-active', (_event, id, active) => {

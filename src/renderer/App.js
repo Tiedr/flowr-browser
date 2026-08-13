@@ -1531,6 +1531,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
     if (preloadUrl) wv.setAttribute('preload', preloadUrl);
     wv.setAttribute('partition', incognito ? 'flow-incognito' : 'persist:flow-main');
     wv.setAttribute('webpreferences', 'contextIsolation=yes sandbox=no');
+    wv.setAttribute('allowpopups', 'true');
 
     // Electron sizes <webview> guests from the element's native bounds. Do not
     // apply CDP device emulation here: it can retain a stale viewport height

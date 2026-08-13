@@ -1,6 +1,6 @@
 {
   "name": "flow-browser",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A minimal, fast, and secure web browser built with React Native and Electron.",
   "author": "Flow Browser Team",
   "main": "src/main/main.js",
