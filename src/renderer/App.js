@@ -1548,6 +1548,14 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
       if (rect.width < 1 || rect.height < 1) return;
       wv.style.width = `${Math.ceil(rect.width)}px`;
       wv.style.height = `${Math.ceil(rect.height)}px`;
+      // Electron's webview shadow iframe otherwise keeps the HTML default
+      // height of 150px even while the host fills the window. This was the
+      // exact cause of pages painting as a short strip above a blank surface.
+      const guestFrame = wv.shadowRoot?.querySelector('iframe');
+      if (guestFrame) {
+        guestFrame.style.height = '100%';
+        guestFrame.style.minHeight = '100%';
+      }
     };
     const resizeObserver = new ResizeObserver(sizeGuest);
     resizeObserver.observe(host);
