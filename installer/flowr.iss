@@ -1,5 +1,5 @@
 #define MyAppName "Flowr"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 [Setup]
 AppId={{A12C0CB9-4DCE-4F43-A860-9E73B94A87F6}
 AppName={#MyAppName}
@@ -10,9 +10,9 @@ AppSupportURL=https://flowr.tieddr.com
 DefaultDirName={autopf}\Flowr
 DefaultGroupName=Flowr
 DisableProgramGroupPage=yes
-OutputDir=..\release_flowr_110
-OutputBaseFilename=Flowr-Installer-1.1.0
-SetupIconFile=..\release_flowr_110\.icon-ico\icon.ico
+OutputDir=..\release_flowr_111
+OutputBaseFilename=Flowr-Installer-1.1.1
+SetupIconFile=..\release_flowr_111\.icon-ico\icon.ico
 UninstallDisplayIcon={app}\Flowr.exe
 Compression=lzma2/fast
 SolidCompression=yes
@@ -31,7 +31,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts"; Flags: checkedonce
 [Files]
-Source: "..\release_flowr_110\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\release_flowr_111\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "flowr-welcome.bmp"; Flags: dontcopy
 [Icons]
 Name: "{autoprograms}\Flowr"; Filename: "{app}\Flowr.exe"

@@ -1,0 +1,14 @@
+{
+  "flowrThemeVersion": 1,
+  "id": "flowr-horizons",
+  "name": "Flowr Horizons",
+  "version": "1.0.0",
+  "developer": "Tieddr",
+  "images": [
+    "https://flowr.tieddr.com/store/assets/abstract-glass.png",
+    "https://flowr.tieddr.com/store/assets/nature-aurora.png",
+    "https://flowr.tieddr.com/store/assets/birds-rainforest.png",
+    "https://flowr.tieddr.com/store/assets/original-guardians.png"
+  ],
+  "settings": {"theme":"flow","accentColor":"#8f75ff","blurIntensity":"heavy","glassToolbar":true,"glassCards":true,"glassSidebar":true,"tabWidth":"wide","tabFontSize":"medium"}
+}

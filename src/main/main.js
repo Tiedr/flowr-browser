@@ -11,6 +11,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const fs = require('fs');
 const Store = require('./store');
 const { parseExtensionId, installStoreExtension } = require('./crx');
 // Tieddr Vault — password manager + Tieddr Wallet, synced to the encrypted mirror.
@@ -1231,6 +1232,41 @@ ipcMain.handle('update-settings', (event, patch) => {
   trackerBlockingEnabled = settingsStore.get('blockTrackers') !== false;
   adBlockerEnabled = settingsStore.get('adBlocker') !== false;
   return settingsStore.data;
+});
+
+ipcMain.handle('install-flowr-theme', async (_event, manifestUrl) => {
+  try {
+    const parsed = new URL(manifestUrl);
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'flowr.tieddr.com') throw new Error('Only verified Flowr Store packages can be installed.');
+    const response = await fetch(parsed.href);
+    if (!response.ok) throw new Error('Theme package could not be downloaded.');
+    const manifest = await response.json();
+    if (manifest.flowrThemeVersion !== 1 || !manifest.id || !manifest.name || !Array.isArray(manifest.images) || !manifest.images.length) throw new Error('Theme package is invalid.');
+    const themeDir = path.join(app.getPath('userData'), 'themes', manifest.id.replace(/[^a-z0-9._-]/gi, '-'));
+    fs.mkdirSync(themeDir, { recursive: true });
+    const savedImages = [];
+    for (let i = 0; i < manifest.images.length; i++) {
+      const imageUrl = new URL(manifest.images[i], parsed.href);
+      if (imageUrl.protocol !== 'https:' || imageUrl.hostname !== 'flowr.tieddr.com') throw new Error('Theme contains an untrusted asset.');
+      const imageResponse = await fetch(imageUrl.href);
+      if (!imageResponse.ok) throw new Error('A theme image could not be downloaded.');
+      const ext = path.extname(imageUrl.pathname) || '.png';
+      const destination = path.join(themeDir, `background-${i + 1}${ext}`);
+      fs.writeFileSync(destination, Buffer.from(await imageResponse.arrayBuffer()));
+      savedImages.push(destination);
+    }
+    const localImageUrls = savedImages.map(file => pathToFileURL(file).href);
+    fs.writeFileSync(path.join(themeDir, 'manifest.json'), JSON.stringify({ ...manifest, installedAt: new Date().toISOString(), localImages: localImageUrls }, null, 2));
+    const installed = settingsStore.get('installedThemes') || [];
+    settingsStore.set('installedThemes', [{ id: manifest.id, name: manifest.name, version: manifest.version || '1.0.0', path: themeDir, images: localImageUrls }, ...installed.filter(t => t.id !== manifest.id)]);
+    const themeSettings = manifest.settings || {};
+    const allowed = ['theme', 'accentColor', 'blurIntensity', 'glassToolbar', 'glassCards', 'glassSidebar', 'tabWidth', 'tabFontSize'];
+    for (const key of allowed) if (Object.prototype.hasOwnProperty.call(themeSettings, key)) settingsStore.set(key, themeSettings[key]);
+    settingsStore.set('customBackgroundUrl', localImageUrls[0]);
+    return { ok: true, name: manifest.name, settings: settingsStore.data };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Theme installation failed.' };
+  }
 });
 
 ipcMain.handle('get-bookmarks', () => bookmarksStore.get('bookmarks') || []);

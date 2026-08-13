@@ -186,14 +186,16 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
 
   // Resolve the start page background.
   const bgPreset = START_BGS.find(b => b.id === (settings.startBackground || 'none'));
-  const bgStyle = bgPreset && bgPreset.css
+  const bgStyle = settings.customBackgroundUrl
+    ? { background: `linear-gradient(rgba(0,0,0,.12), rgba(0,0,0,.32)), url(${settings.customBackgroundUrl}) center/cover no-repeat` }
+    : bgPreset && bgPreset.css
     ? { background: bgPreset.css }
     : { background: theme.id === 'aurora' || theme.id === 'linen'
       ? 'radial-gradient(circle at 50% 18%, rgba(122,165,31,0.14), transparent 34%), linear-gradient(145deg, #fafbf8 0%, #f1f3ed 48%, #e7ebe1 100%)'
       : 'radial-gradient(circle at 50% 16%, rgba(135,185,40,0.16), transparent 32%), linear-gradient(145deg, #171b18 0%, #0f1110 52%, #090b0a 100%)' };
 
   // Determine if the background is light or dark for contrast.
-  const isLightBg = !bgPreset || bgPreset.id === 'none' ? (theme.id === 'aurora' || theme.id === 'linen')
+  const isLightBg = settings.customBackgroundUrl ? false : !bgPreset || bgPreset.id === 'none' ? (theme.id === 'aurora' || theme.id === 'linen')
     : ['gradient-snow', 'gradient-paper'].includes(bgPreset.id);
 
   return (
@@ -978,7 +980,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             <Text style={[s.rs, { color: theme.muted, marginBottom: 10 }]}>Set a background image or gradient that shows on every new tab.</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {START_BGS.map(bg => (
-                <TouchableOpacity key={bg.id} onPress={() => update({ startBackground: bg.id })}
+                <TouchableOpacity key={bg.id} onPress={() => update({ startBackground: bg.id, customBackgroundUrl: '' })}
                   style={{ alignItems: 'center', gap: 4 }}>
                   <View
                     style={{ width: 80, height: 52, borderRadius: 10, borderWidth: 2, borderColor: (settings.startBackground || 'none') === bg.id ? theme.accent : theme.border, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', background: bg.css || theme.soft }}>
@@ -988,6 +990,14 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
                   <Text style={{ fontSize: 10, color: (settings.startBackground || 'none') === bg.id ? theme.accent : theme.faint, fontWeight: (settings.startBackground || 'none') === bg.id ? '600' : '400' }}>{bg.label}</Text>
                 </TouchableOpacity>
               ))}
+              {(settings.installedThemes || []).flatMap(installedTheme => (installedTheme.images || []).map((image, imageIndex) => (
+                <TouchableOpacity key={`${installedTheme.id}-${imageIndex}`} onPress={() => update({ customBackgroundUrl: image })} style={{ alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 80, height: 52, borderRadius: 10, borderWidth: 2, borderColor: settings.customBackgroundUrl === image ? theme.accent : theme.border, overflow: 'hidden', backgroundImage: `url(${image})`, backgroundPosition: 'center', backgroundSize: 'cover' }}>
+                    {settings.customBackgroundUrl === image ? <View style={{ position: 'absolute', top: 4, right: 4 }}><CheckCircle size={14} color={theme.accent} /></View> : null}
+                  </View>
+                  <Text style={{ fontSize: 10, maxWidth: 80, color: settings.customBackgroundUrl === image ? theme.accent : theme.faint }} numberOfLines={1}>{installedTheme.name} {imageIndex + 1}</Text>
+                </TouchableOpacity>
+              )))}
             </View>
           </Card>
           <Card title="Glassmorphism" icon={Sparkles} theme={theme}>
@@ -1574,7 +1584,17 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
 
     requestAnimationFrame(applySrc);
 
-    const onNav = (e, url) => { if (url && url !== 'about:blank') { h().updateUrl(tab.id, url); try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {} h().addHistory(url, ''); } };
+    const onNav = (e, url) => {
+      if (!url || url === 'about:blank') return;
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === 'flowr.tieddr.com' && parsed.pathname === '/store/install-theme.html') {
+          const manifest = parsed.searchParams.get('manifest');
+          if (manifest) { h().installTheme(manifest, wv); return; }
+        }
+      } catch (_) {}
+      h().updateUrl(tab.id, url); try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {} h().addHistory(url, '');
+    };
     const onNavInPage = (e, url) => { if (url && url !== 'about:blank') h().updateUrl(tab.id, url); };
     const onTitle = (e, title) => { if (title) h().updateTitle(tab.id, title); };
     const onFavicon = (e, favicons) => { if (favicons && favicons[0]) h().updateFavicon(tab.id, favicons[0]); };
@@ -2075,6 +2095,14 @@ export default function App() {
     contextMenu: (p) => openContext(p),
     newTab: (url) => openWebTab(url),
     register: (id) => ipc?.send('register-webview', id),
+    installTheme: async (manifest, wv) => {
+      const result = await ipc?.invoke('install-flowr-theme', manifest);
+      if (result?.ok) {
+        setSettings(result.settings || settingsRef.current);
+        showDialog({ title: `${result.name} installed`, message: 'The theme images and Flowr interface settings were downloaded and applied.' });
+        try { wv.goBack(); } catch (_) {}
+      } else showDialog({ title: 'Theme could not be installed', message: result?.error || 'The theme package is invalid.' });
+    },
     navError: (id, url, msg) => showDialog({ title: 'Could not load page', message: `${host(url) || 'Page'}${msg ? ': ' + msg : ''} — the site may block embedding. Try opening in a new window.` })
   };
   useEffect(() => { handlersRef.current = handlers; });

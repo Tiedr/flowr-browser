@@ -1,0 +1,13 @@
+{
+  "flowrThemeVersion": 1,
+  "id": "quiet-earth",
+  "name": "Quiet Earth",
+  "version": "1.0.0",
+  "developer": "Tieddr",
+  "images": [
+    "https://flowr.tieddr.com/store/assets/nature-aurora.png",
+    "https://flowr.tieddr.com/store/assets/birds-rainforest.png",
+    "https://flowr.tieddr.com/store/assets/abstract-glass.png"
+  ],
+  "settings": {"theme":"aurora","accentColor":"#7dd7ae","blurIntensity":"medium","glassToolbar":true,"glassCards":true,"glassSidebar":true,"tabWidth":"normal","tabFontSize":"medium"}
+}
