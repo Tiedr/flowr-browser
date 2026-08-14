@@ -35,7 +35,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:adblock
-      - run: npm run ${{ matrix.command }}
+      - name: Build, sign and notarize
+        run: npm run ${{ matrix.command }}
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Verify Apple signature and notarization ticket
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          app_path="$(find release_v5 -type d -name 'Flowr.app' -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          spctl --assess --verbose=2 --type exec "$app_path"
+          for dmg in release_v5/*.dmg; do
+            xcrun stapler validate "$dmg"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

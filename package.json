@@ -42,11 +42,11 @@
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "notarize": true,
       "target": [
         "dmg",
         "zip"
-      ],
-      "identity": null
+      ]
     },
     "linux": {
       "category": "Network;WebBrowser",
