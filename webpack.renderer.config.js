@@ -32,7 +32,10 @@ module.exports = {
       },
       {
         test: /\.(png|jpe?g|gif|svg)$/i,
-        type: 'asset/inline',
+        type: 'asset/resource',
+        generator: {
+          filename: 'assets/[name].[contenthash:8][ext]',
+        },
       },
     ],
   },
@@ -41,13 +44,12 @@ module.exports = {
       template: './src/renderer/index.html',
     }),
   ],
-  // App.js is a large, UI-heavy renderer. Terser's single-threaded minification
-  // made release builds take several minutes while providing little value for a
-  // packaged desktop asset. Keep production dead-code elimination but emit the
-  // readable bundle so builds remain deterministic and debuggable.
   optimization: {
-    minimize: false,
+    minimize: true,
+    moduleIds: 'deterministic',
+    chunkIds: 'deterministic',
   },
+  devtool: false,
   devServer: {
     static: {
       directory: path.join(__dirname, 'dist'),

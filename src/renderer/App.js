@@ -1531,7 +1531,7 @@ function rectOf(el) {
   catch (_) { return { left: 0, top: 0 }; }
 }
 
-function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
+const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -1591,6 +1591,10 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
         if (parsed.hostname === 'flowr.tieddr.com' && parsed.pathname === '/store/install-theme.html') {
           const manifest = parsed.searchParams.get('manifest');
           if (manifest) { h().installTheme(manifest, wv); return; }
+        }
+        if (parsed.hostname === 'flowr.tieddr.com' && parsed.pathname === '/store/install-extension.html') {
+          const manifest = parsed.searchParams.get('manifest');
+          if (manifest) { h().installFlowrExtension(manifest, wv); return; }
         }
       } catch (_) {}
       h().updateUrl(tab.id, url); try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {} h().addHistory(url, '');
@@ -1679,7 +1683,7 @@ function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlers
   }, [preloadUrl]);
 
   return <div ref={hostRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
-}
+});
 
 function SidePanelHost({ info, preloadUrl, contentRef }) {
   const ref = useRef(null);
@@ -2102,6 +2106,14 @@ export default function App() {
         showDialog({ title: `${result.name} installed`, message: 'The theme images and Flowr interface settings were downloaded and applied.' });
         try { wv.goBack(); } catch (_) {}
       } else showDialog({ title: 'Theme could not be installed', message: result?.error || 'The theme package is invalid.' });
+    },
+    installFlowrExtension: async (manifest, wv) => {
+      const result = await ipc?.invoke('install-flowr-extension', manifest);
+      if (result?.ok) {
+        setExtensions(result.extensions || []); refreshExtActs();
+        showDialog({ title: `${result.name} added`, message: 'The extension is installed and enabled in Flowr.' });
+        try { wv.goBack(); } catch (_) {}
+      } else showDialog({ title: 'Extension could not be installed', message: result?.error || 'The extension package is invalid.' });
     },
     navError: (id, url, msg) => showDialog({ title: 'Could not load page', message: `${host(url) || 'Page'}${msg ? ': ' + msg : ''} — the site may block embedding. Try opening in a new window.` })
   };

@@ -1269,6 +1269,39 @@ ipcMain.handle('install-flowr-theme', async (_event, manifestUrl) => {
   }
 });
 
+ipcMain.handle('install-flowr-extension', async (_event, packageUrl) => {
+  try {
+    const parsed = new URL(packageUrl);
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'flowr.tieddr.com') throw new Error('Only verified Flowr Store packages can be installed.');
+    const response = await fetch(parsed.href);
+    if (!response.ok) throw new Error('Extension package could not be downloaded.');
+    const pkg = await response.json();
+    if (pkg.flowrExtensionVersion !== 1 || !pkg.id || !pkg.name || !Array.isArray(pkg.files) || !pkg.files.length) throw new Error('Extension package is invalid.');
+    const extensionDir = path.join(app.getPath('userData'), 'flowr-extensions', pkg.id.replace(/[^a-z0-9._-]/gi, '-'));
+    fs.mkdirSync(extensionDir, { recursive: true });
+    for (const entry of pkg.files) {
+      const relative = String(entry.path || '').replace(/\\/g, '/');
+      if (!relative || relative.startsWith('/') || relative.includes('..')) throw new Error('Extension contains an unsafe file path.');
+      const assetUrl = new URL(entry.url, parsed.href);
+      if (assetUrl.protocol !== 'https:' || assetUrl.hostname !== 'flowr.tieddr.com') throw new Error('Extension contains an untrusted asset.');
+      const assetResponse = await fetch(assetUrl.href);
+      if (!assetResponse.ok) throw new Error(`Could not download ${relative}.`);
+      const destination = path.join(extensionDir, relative);
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.writeFileSync(destination, Buffer.from(await assetResponse.arrayBuffer()));
+    }
+    if (!fs.existsSync(path.join(extensionDir, 'manifest.json'))) throw new Error('Extension manifest is missing.');
+    const loadedExtension = await session.defaultSession.loadExtension(extensionDir, { allowFileAccess: true });
+    const extensions = extensionsStore.get('extensions') || [];
+    const record = { id: loadedExtension.id, packageId: pkg.id, name: loadedExtension.name || pkg.name, version: loadedExtension.version || pkg.version || '1.0.0', path: extensionDir, source: 'flowr-store', enabled: true, error: null, date: new Date().toISOString() };
+    const next = [record, ...extensions.filter(item => item.id !== record.id && item.packageId !== pkg.id)];
+    extensionsStore.set('extensions', next);
+    return { ok: true, name: record.name, extensions: next };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Extension installation failed.' };
+  }
+});
+
 ipcMain.handle('get-bookmarks', () => bookmarksStore.get('bookmarks') || []);
 
 ipcMain.handle('add-bookmark', (event, bookmark) => {

@@ -1,0 +1,1 @@
+{"manifest_version":3,"name":"Focus Bloom","version":"1.0.0","description":"A calm focus timer that grows a private light garden.","permissions":["storage"],"action":{"default_title":"Focus Bloom","default_popup":"popup.html"}}
