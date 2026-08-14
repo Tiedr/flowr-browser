@@ -9,11 +9,16 @@
     "electron": "wait-on http://localhost:8081 && cross-env NODE_ENV=development electron .",
     "dev": "concurrently \"npm start\" \"npm run electron\"",
     "build": "webpack --config webpack.renderer.config.js --mode production",
-    "dist": "npm run build && electron-builder"
+    "test:adblock": "node tests/adblock.test.js",
+    "dist": "npm run build && electron-builder",
+    "dist:linux": "npm run build && electron-builder --linux AppImage --x64 --publish never",
+    "dist:mac:x64": "npm run build && electron-builder --mac dmg zip --x64 --publish never",
+    "dist:mac:arm64": "npm run build && electron-builder --mac dmg zip --arm64 --publish never"
   },
   "build": {
     "appId": "com.flow.browser",
     "productName": "Flowr",
+    "artifactName": "Flowr-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release_v5"
     },
@@ -34,11 +39,21 @@
       "verifyUpdateCodeSignature": false
     },
     "mac": {
-      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "identity": null
     },
     "linux": {
-      "target": "AppImage"
+      "category": "Network;WebBrowser",
+      "synopsis": "A calmer, private browser by Tieddr",
+      "target": [
+        "AppImage"
+      ]
     }
   },
   "dependencies": {

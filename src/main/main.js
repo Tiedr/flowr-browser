@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const Store = require('./store');
 const { parseExtensionId, installStoreExtension } = require('./crx');
+const { shouldBlockRequest } = require('./adblock');
 // Tieddr Vault — password manager + Tieddr Wallet, synced to the encrypted mirror.
 const vault = require('./vault');
 const vaultAccount = require('./vault/account');
@@ -131,55 +132,27 @@ function configureSession(ses) {
   // Present as the Chromium browser engine we actually embed. Many web apps
   // reject Electron's default UA even though the page APIs are compatible.
   const chromeMajor = String(process.versions.chrome || '142.0.0.0').split('.')[0];
-  const compatibleUA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`;
+  const platformTokens = {
+    darwin: { ua: 'Macintosh; Intel Mac OS X 10_15_7', hint: '"macOS"' },
+    linux: { ua: 'X11; Linux x86_64', hint: '"Linux"' },
+    win32: { ua: 'Windows NT 10.0; Win64; x64', hint: '"Windows"' }
+  };
+  const platform = platformTokens[process.platform] || platformTokens.linux;
+  const compatibleUA = `Mozilla/5.0 (${platform.ua}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`;
   ses.setUserAgent(compatibleUA, 'en-US,en;q=0.9');
   ses.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
     details.requestHeaders['User-Agent'] = compatibleUA;
     // Avoid Electron-specific client-hint brands triggering unsupported-browser gates.
     details.requestHeaders['sec-ch-ua'] = `"Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}", "Not_A Brand";v="99"`;
-    details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
+    details.requestHeaders['sec-ch-ua-platform'] = platform.hint;
     details.requestHeaders['sec-ch-ua-mobile'] = '?0';
     callback({ requestHeaders: details.requestHeaders });
   });
-  // Built-in ad blocker: blocks requests to known ad/tracking domains.
-  // Uses a curated list of common ad networks, trackers, and telemetry
-  // endpoints. This runs as a webRequest filter before extensions get a chance
-  // to handle the request, so it works even without an ad-blocker extension.
-  const AD_BLOCK_DOMAINS = [
-    // Major ad networks
-    '*://*.doubleclick.net/*', '*://*.googlesyndication.com/*', '*://*.googleadservices.com/*',
-    '*://*.google-analytics.com/*', '*://*.googletagmanager.com/*', '*://*.googletagservices.com/*',
-    '*://*.adnxs.com/*', '*://*.adsrvr.org/*', '*://*.advertising.com/*', '*://*.adtechus.com/*',
-    '*://*.casalemedia.com/*', '*://*.demdex.net/*', '*://*.everesttech.net/*', '*://*.mathtag.com/*',
-    '*://*.mediaplex.com/*', '*://*.moatads.com/*', '*://*.rubiconproject.com/*', '*://*.turn.com/*',
-    '*://*.yieldmo.com/*', '*://*.sharethrough.com/*', '*://*.taboola.com/*', '*://*.outbrain.com/*',
-    '*://*.revjet.com/*', '*://*.serving-sys.com/*', '*://*.spotxchange.com/*', '*://*.videology.com/*',
-    // Facebook / Meta tracking
-    '*://*.facebook.com/tr*', '*://*.facebook.net/*', '*://*.fbcdn.net/*facebook*',
-    '*://*.instagram.com/*pixel*', '*://*.fb.com/pixel*',
-    // Other tech trackers
-    '*://*.hotjar.com/*', '*://*.fullstory.com/*', '*://*.heap.io/*', '*://*.mixpanel.com/*',
-    '*://*.segment.io/*', '*://*.segment.com/*', '*://*.amplitude.com/*', '*://*.kissmetrics.com/*',
-    '*://*.optimizely.com/*', '*://*.crazyegg.com/*', '*://*.clicktale.com/*', '*://*.mouseflow.com/*',
-    '*://*.luckyorange.com/*', '*://*.criteo.com/*', '*://*.criteo.net/*', '*://*.smartadserver.com/*',
-    '*://*.pubmatic.com/*', '*://*.openx.net/*', '*://*.rubicon.com/*', '*://*.bidswitch.net/*',
-    '*://*.teads.tv/*', '*://*.prebid.org/*', '*://*.adskeeper.com/*',
-    // Cryptominers
-    '*://*.coin-hive.com/*', '*://*.coinhive.com/*', '*://*.crypto-loot.com/*', '*://*.authedmine.com/*',
-    '*://*.jsecoin.com/*', '*://*.webminepool.com/*', '*://*.2giga.link/*', '*://*.ppid.net/*',
-    // Telemetry / data collection
-    '*://*.telemetry.microsoft.com/*', '*://*.vortex.data.microsoft.com/*', '*://*.settings-win.data.microsoft.com/*',
-    '*://*.telemetry.chrome.com/*', '*://*.clients.google.com/collect*',
-  ];
-
-  const adBlockFilter = { urls: AD_BLOCK_DOMAINS };
-
-  // Also block by resource type for known ad patterns
-  ses.webRequest.onBeforeRequest(adBlockFilter, (details, callback) => {
-    if (adBlockerEnabled) {
-      return callback({ cancel: true });
-    }
-    callback({ cancel: false });
+  // Match all web requests against the compact, testable Flowr filter engine.
+  // It blocks known advertising hosts plus third-party tracking endpoints while
+  // leaving first-party pages and navigation untouched.
+  ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    callback({ cancel: shouldBlockRequest(details, adBlockerEnabled) });
   });
 
   // Grant common extension permissions — these are safe, non-privileged APIs
