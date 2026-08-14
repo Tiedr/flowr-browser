@@ -23,5 +23,7 @@
 .apple-logo i::before { content: ""; position: absolute; width: 8px; height: 5px; border-radius: 100% 0; background: #fff; left: 24px; top: 8px; transform: rotate(-35deg); }
 .apple-logo i::after { content: ""; position: absolute; width: 7px; height: 8px; border-radius: 50%; background: #111; right: 9px; top: 18px; }
 .linux-logo { font-size: 24px; line-height: 1; }
+.platform-links { display: flex; gap: 7px; }
+.platform-links a { padding: 10px 12px; border-radius: 10px; background: #111; color: #fff; font-size: 11px; font-weight: 750; white-space: nowrap; }
 
 @media (max-width: 920px) { .platforms { grid-template-columns: 1fr; } }
