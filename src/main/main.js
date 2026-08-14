@@ -1188,6 +1188,7 @@ ipcMain.handle('choose-download-path', async () => {
 ipcMain.handle('reset-settings', () => {
   Object.entries(SETTINGS_DEFAULTS).forEach(([k, v]) => settingsStore.set(k, v));
   trackerBlockingEnabled = true;
+  adBlockerEnabled = true;
   return settingsStore.data;
 });
 
