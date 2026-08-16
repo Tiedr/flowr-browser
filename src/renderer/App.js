@@ -938,14 +938,15 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
       case 'performance':
         return (<>
           <Card title="Performance" icon={Gauge} theme={theme}>
-            <Toggle label="Memory saver" detail="Free up memory from inactive tabs." value={!!settings.memorySaver} onPress={() => update({ memorySaver: !settings.memorySaver })} theme={theme} />
+            <Toggle label="Memory saver" detail="Unload long-idle tabs and restore them when selected." value={settings.memorySaver !== false} onPress={() => update({ memorySaver: settings.memorySaver === false })} theme={theme} />
+            <Slider label="Unload inactive tabs" detail="How long a background tab stays resident before Flowr releases its memory." value={settings.inactiveTabTimeout || 10} min={5} max={60} step={5} onChange={v => update({ inactiveTabTimeout: v })} format={v => `${v} min`} theme={theme} />
             <Toggle label="Use hardware acceleration" detail="Use the GPU for smoother graphics (restart to apply)." value={settings.hardwareAcceleration !== false} onPress={() => update({ hardwareAcceleration: settings.hardwareAcceleration === false })} theme={theme} />
             <Toggle label="GPU rasterization" detail="Use the GPU to render page content." value={!!settings.gpuRasterization} onPress={() => update({ gpuRasterization: !settings.gpuRasterization })} theme={theme} />
           </Card>
           <Card title="Rendering" icon={Monitor} theme={theme}>
             <Toggle label="Smooth scrolling" detail="Enable smooth kinetic scrolling." value={settings.smoothScroll !== false} onPress={() => update({ smoothScroll: settings.smoothScroll === false })} theme={theme} />
             <Toggle label="Accelerated 2D canvas" detail="Hardware-accelerate canvas drawing for faster rendering." value={!!settings.acceleratedCanvas} onPress={() => update({ acceleratedCanvas: !settings.acceleratedCanvas })} theme={theme} />
-            <Slider label="Render process limit" detail="Maximum number of renderer processes." value={settings.renderProcessLimit || 4} min={1} max={16} step={1} onChange={v => update({ renderProcessLimit: v })} format={v => `${v} process${v > 1 ? 'es' : ''}`} theme={theme} />
+            <Slider label="Render process limit" detail="Maximum page renderer pool. Restart Flowr after changing this." value={settings.renderProcessLimit || 4} min={2} max={8} step={1} onChange={v => update({ renderProcessLimit: v })} format={v => `${v} processes`} theme={theme} />
           </Card>
           <Card title="Network" icon={Wifi} theme={theme}>
             <Pick label="DNS over HTTPS" values={['off', 'opportunistic', 'strict']} value={settings.dnsOverHttps || 'off'} format={v => ({ off: 'Off', opportunistic: 'Opportunistic', strict: 'Strict' })[v]} onPick={v => update({ dnsOverHttps: v })} theme={theme} />
@@ -1718,7 +1719,7 @@ let TAB_SEQ = 2;
 const nextId = () => TAB_SEQ++;
 
 export default function App() {
-  const [tabs, setTabs] = useState([{ id: 1, kind: 'web', title: 'New Tab', url: 'about:blank', loading: false }]);
+  const [tabs, setTabs] = useState([{ id: 1, kind: 'web', title: 'New Tab', url: 'about:blank', loading: false, lastActiveAt: Date.now() }]);
   const [activeId, setActiveId] = useState(1);
   const [findOpen, setFindOpen] = useState(false);
   const [findText, setFindText] = useState('');
@@ -1798,6 +1799,33 @@ export default function App() {
   const zoomRef = useRef(zoom); zoomRef.current = zoom;
   const urlWrapRef = useRef(null);
 
+  // A hidden <webview> still owns a Chromium renderer and all of the page's
+  // JavaScript heap. Memory Saver releases that guest only after it has been
+  // idle for the configured period. Selecting the tab mounts it again at its
+  // last URL; normal tab switching remains instant and does not reload.
+  useEffect(() => {
+    const now = Date.now();
+    setTabs(current => current.map(t => t.id === activeId
+      ? { ...t, discarded: false, lastActiveAt: now }
+      : t));
+  }, [activeId]);
+
+  useEffect(() => {
+    if (settings.memorySaver === false) return undefined;
+    const sweep = () => {
+      const cutoff = Date.now() - Math.max(5, Number(settings.inactiveTabTimeout) || 10) * 60 * 1000;
+      setTabs(current => current.map(t => (
+        t.kind === 'web' && t.id !== activeIdRef.current && t.url && t.url !== 'about:blank' &&
+        !t.loading && !t.discarded && (t.lastActiveAt || 0) < cutoff
+          ? { ...t, discarded: true }
+          : t
+      )));
+    };
+    const timer = setInterval(sweep, 30000);
+    sweep();
+    return () => clearInterval(timer);
+  }, [settings.memorySaver, settings.inactiveTabTimeout]);
+
   const load = useCallback(async () => {
     if (!ipc) return;
     const [r, b, h, d, p, a, e, f, n, nf] = await Promise.all([
@@ -1821,7 +1849,7 @@ export default function App() {
 
   const openWebTab = useCallback((u = 'about:blank') => {
     const id = nextId();
-    setTabs(v => v.concat({ id, kind: 'web', title: 'New Tab', url: 'about:blank', loading: false }));
+    setTabs(v => v.concat({ id, kind: 'web', title: 'New Tab', url: 'about:blank', loading: false, lastActiveAt: Date.now() }));
     setActiveId(id);
     if (u && u !== 'about:blank') setTimeout(() => {
       setTabs(v => v.map(t => t.id === id ? { ...t, url: u, title: host(u), loading: true } : t));
@@ -1855,7 +1883,7 @@ export default function App() {
         if (!left.length) {
           const nid = nextId();
           setActiveId(nid);
-          return [{ id: nid, kind: 'web', title: 'New Tab', url: 'about:blank', loading: false }];
+          return [{ id: nid, kind: 'web', title: 'New Tab', url: 'about:blank', loading: false, lastActiveAt: Date.now() }];
         }
         if (id === activeIdRef.current) setActiveId(left[Math.min(idx, left.length - 1)].id);
         return left;
@@ -2121,26 +2149,36 @@ export default function App() {
 
   useEffect(() => {
     if (!ipc) return;
+    const unsubscribers = [];
+    const listen = (channel, fn) => {
+      const unsubscribe = ipc.on(channel, fn);
+      if (typeof unsubscribe === 'function') unsubscribers.push(unsubscribe);
+    };
     load();
     ipc.invoke('get-view-preload').then(url => setPreloadUrl(url || '')).catch(() => setPreloadUrl(''));
-    ipc.on('request-new-tab', u => openWebTab(u));
-    ipc.on('downloads-changed', x => setDownloads(x || []));
-    ipc.on('history-changed', x => setHistory(x || []));
+    listen('request-new-tab', u => openWebTab(u));
+    listen('downloads-changed', x => setDownloads(x || []));
+    listen('history-changed', x => setHistory(x || []));
     // Pushed by a background Tieddr Space sync (on sign-in, on startup if
     // already signed in, and every ~15 min) — not tied to a user action, so
     // it needs its own listener rather than piggybacking on load()'s explicit
     // get-bookmarks/get-bookmark-folders calls.
-    ipc.on('bookmarks-changed', b => { setBookmarks(b || []); ipc.invoke('get-bookmark-folders').then(f => setFolders(f || [])); });
-    ipc.on('bookmark-folders-changed', x => setFolders(x || []));
-    ipc.on('notes-changed', x => { setNotes(x || []); ipc.invoke('get-note-folders').then(f => setNoteFolders(f || [])); });
-    ipc.on('note-folders-changed', x => setNoteFolders(x || []));
-    ipc.on('profile-changed', load);
-    ipc.on('show-context-menu', p => openContext(p));
-    ipc.on('account-changed', a => { setAccount(a || null); setTimeout(load, 150); ipc.invoke('vault-state').then(v => setVaultState(v || { linked: false, unlocked: false, hasVault: false })); });
-    ipc.on('vault-locked', () => { setVaultState(v => ({ ...v, unlocked: false })); setVaultItems([]); });
-    ipc.on('side-panel-opened', (e, info) => setSidePanel({ open: true, extId: info?.extId || null, url: info?.url || null, width: info?.width || 400, incognito: !!info?.incognito }));
-    ipc.on('side-panel-closed', () => setSidePanel({ open: false, extId: null, url: null }));
-    ipc.on('pw-save-prompt', ({ origin, username, password }) => {
+    listen('bookmarks-changed', b => { setBookmarks(b || []); ipc.invoke('get-bookmark-folders').then(f => setFolders(f || [])); });
+    listen('bookmark-folders-changed', x => setFolders(x || []));
+    listen('notes-changed', x => { setNotes(x || []); ipc.invoke('get-note-folders').then(f => setNoteFolders(f || [])); });
+    listen('note-folders-changed', x => setNoteFolders(x || []));
+    listen('profile-changed', load);
+    listen('show-context-menu', p => openContext(p));
+    listen('account-changed', a => { setAccount(a || null); setTimeout(load, 150); ipc.invoke('vault-state').then(v => setVaultState(v || { linked: false, unlocked: false, hasVault: false })); });
+    listen('vault-locked', () => { setVaultState(v => ({ ...v, unlocked: false })); setVaultItems([]); });
+    listen('side-panel-opened', info => setSidePanel({ open: true, extId: info?.extId || null, url: info?.url || null, width: info?.width || 400, incognito: !!info?.incognito }));
+    listen('side-panel-closed', () => setSidePanel({ open: false, extId: null, url: null }));
+    listen('memory-pressure', () => setTabs(current => current.map(t => (
+      t.kind === 'web' && t.id !== activeIdRef.current && t.url && t.url !== 'about:blank' && !t.loading
+        ? { ...t, discarded: true }
+        : t
+    ))));
+    listen('pw-save-prompt', ({ origin, username, password }) => {
       pendingPwRef.current = { origin, username, password };
       showDialog({
         title: 'Save password?',
@@ -2148,11 +2186,12 @@ export default function App() {
         actions: [{ label: 'Not now', action: null }, { label: 'Save password', primary: true, action: { dialog: 'pw-save' } }]
       });
     });
+    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
   }, [load, openWebTab, showDialog, openContext]);
 
   useEffect(() => {
     if (!ipc) return;
-    ipc.on('shortcut', action => {
+    const unsubscribe = ipc.on('shortcut', action => {
       switch (action) {
         case 'new-tab': case 'reopen': openWebTab(); break;
         case 'new-window': ipc.send('new-window', { incognito: false }); break;
@@ -2183,6 +2222,7 @@ export default function App() {
           }
       }
     });
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
   }, [openWebTab, closeTab, openPage, bookmark, openFind, back, forward, reload, doZoom]);
 
   const rmBookmark = async u => setBookmarks(await ipc.invoke('remove-bookmark', u));
@@ -2291,7 +2331,7 @@ export default function App() {
         />
       )}
       <View style={[s.content, { height: 'calc(100vh - ' + viewTop + 'px)' }]} ref={contentRef}>
-        {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank').map(t => (
+        {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank' && !t.discarded).map(t => (
           <WebviewHost key={t.id} tab={t} active={isWeb && t.id === activeId} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
         ))}
         {isWeb ? (

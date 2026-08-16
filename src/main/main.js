@@ -64,7 +64,9 @@ const SETTINGS_DEFAULTS = {
   askWhereToSave: false,
   savePasswords: true,
   autofill: true,
-  memorySaver: false,
+  memorySaver: true,
+  inactiveTabTimeout: 10,
+  renderProcessLimit: 4,
   hardwareAcceleration: true,
   aiSuggestions: true,
   reduceMotion: false,
@@ -74,7 +76,25 @@ const SETTINGS_DEFAULTS = {
   startBackground: 'gradient-midnight'
 };
 const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
+// Existing installations inherited Memory Saver's old no-op/disabled default.
+// Apply the efficient profile once, while leaving subsequent user choices
+// untouched across upgrades.
+if (settingsStore.get('performanceProfileVersion') !== 1) {
+  settingsStore.set('memorySaver', true);
+  settingsStore.set('inactiveTabTimeout', 10);
+  settingsStore.set('renderProcessLimit', 4);
+  settingsStore.set('performanceProfileVersion', 1);
+}
 if (settingsStore.get('hardwareAcceleration') === false) app.disableHardwareAcceleration();
+
+// Keep Chromium from creating an unbounded renderer pool on machines with
+// many tabs. This is a soft upper bound (GPU/network/extension utility
+// processes are separate) and must be configured before app.ready.
+const configuredRendererLimit = Number(settingsStore.get('renderProcessLimit'));
+const rendererProcessLimit = Number.isFinite(configuredRendererLimit)
+  ? Math.min(8, Math.max(2, Math.round(configuredRendererLimit)))
+  : SETTINGS_DEFAULTS.renderProcessLimit;
+app.commandLine.appendSwitch('renderer-process-limit', String(rendererProcessLimit));
 const downloadsStore = new Store('downloads', { downloads: [] });
 const extensionsStore = new Store('extensions', { extensions: [] });
 const accountStore = new Store('account', { account: null });
@@ -89,6 +109,7 @@ let mainWindow;
 let trackerBlockingEnabled = settingsStore.get('blockTrackers') !== false;
 let adBlockerEnabled = settingsStore.get('adBlocker') !== false;
 let clipboardClearTimeout = null;
+let memoryPressureInterval = null;
 
 const downloadItems = new Map();
 const downloadPersistAt = new Map();
@@ -509,8 +530,25 @@ app.whenReady().then(async () => {
   // defaultSession does not affect <webview partition="persist:flow-main">.
   browsingSession = INCOGNITO ? session.fromPartition('flow-incognito') : session.fromPartition('persist:flow-main');
   configureSession(browsingSession);
-  if (!INCOGNITO) await loadStoredExtensions();
   createWindow();
+
+  // Under genuine system pressure, ask the renderer to release all inactive
+  // tab guests immediately rather than waiting for the normal idle timeout.
+  // Values returned by Electron are in KiB.
+  const checkMemoryPressure = () => {
+    if (settingsStore.get('memorySaver') === false) return;
+    try {
+      const info = app.getSystemMemoryInfo();
+      const criticallyLow = info.free < 1024 * 1024 || (info.total > 0 && info.free / info.total < 0.1);
+      if (criticallyLow) send('memory-pressure', { free: info.free, total: info.total });
+    } catch (_) {}
+  };
+  memoryPressureInterval = setInterval(checkMemoryPressure, 30000);
+  memoryPressureInterval.unref?.();
+
+  // Extensions can perform disk I/O and start background service workers.
+  // Load them after the browser chrome is visible so they never block startup.
+  if (!INCOGNITO) setTimeout(() => { void loadStoredExtensions(); }, 1500);
 
   // System idle detection for vault auto-lock
   const { powerMonitor } = require('electron');
@@ -532,8 +570,10 @@ app.whenReady().then(async () => {
   // Already signed in from a previous launch — sync now, then keep syncing
   // periodically for the rest of this session. Skipped in incognito.
   if (!INCOGNITO && accountStore.get('account')) {
-    void syncTieddrAll();
-    startAutoSync();
+    setTimeout(() => {
+      void syncTieddrAll();
+      startAutoSync();
+    }, 4000);
   }
 
   app.on('activate', () => {
@@ -552,6 +592,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (memoryPressureInterval) clearInterval(memoryPressureInterval);
   [profilesStore, settingsStore, downloadsStore, extensionsStore, accountStore].forEach(s => s.flush && s.flush());
   if (bookmarksStore) bookmarksStore.flush && bookmarksStore.flush();
   if (historyStore) historyStore.flush && historyStore.flush();
@@ -587,7 +628,7 @@ ipcMain.on('set-webview-active', (_event, id, active) => {
   const wc = webContents.fromId(id);
   if (!wc || wc.isDestroyed()) return;
   try { wc.setBackgroundThrottling(!active); } catch (_) {}
-  try { wc.setFrameRate(active ? 60 : 8); } catch (_) {}
+  try { wc.setFrameRate(active ? 60 : 1); } catch (_) {}
 });
 
 // Commands that need the main process (dialogs, reader mode, save-page). The
