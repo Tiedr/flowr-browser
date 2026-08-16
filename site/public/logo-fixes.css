@@ -16,13 +16,8 @@
 
 .orbit b small { margin-top: 4px; color: #858985; }
 .platforms { max-width: 1180px; grid-template-columns: repeat(3, 1fr); }
-.platform-icon { position: relative; flex: 0 0 45px; }
-.windows-logo { display: grid; grid-template-columns: repeat(2, 10px); grid-template-rows: repeat(2, 10px); gap: 3px; place-content: center; }
-.windows-logo i { width: 10px; height: 10px; background: #fff; display: block; }
-.apple-logo i { width: 21px; height: 24px; border-radius: 52% 48% 58% 42%; background: #fff; display: block; transform: translateY(2px); }
-.apple-logo i::before { content: ""; position: absolute; width: 8px; height: 5px; border-radius: 100% 0; background: #fff; left: 24px; top: 8px; transform: rotate(-35deg); }
-.apple-logo i::after { content: ""; position: absolute; width: 7px; height: 8px; border-radius: 50%; background: #111; right: 9px; top: 18px; }
-.linux-logo { font-size: 24px; line-height: 1; }
+.platform-icon { position: relative; flex: 0 0 45px; width: 45px; height: 45px; border-radius: 12px; display: grid; place-items: center; background: #111; }
+.platform-icon img { width: 23px; height: 23px; object-fit: contain; filter: brightness(0) invert(1); }
 .platform-links { display: flex; gap: 7px; }
 .platform-links a { padding: 10px 12px; border-radius: 10px; background: #111; color: #fff; font-size: 11px; font-weight: 750; white-space: nowrap; }
 
