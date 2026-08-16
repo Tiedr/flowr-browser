@@ -16,8 +16,24 @@
 
 .orbit b small { margin-top: 4px; color: #858985; }
 .platforms { max-width: 1180px; grid-template-columns: repeat(3, 1fr); }
-.platform-icon { position: relative; flex: 0 0 45px; width: 45px; height: 45px; border-radius: 12px; display: grid; place-items: center; background: #111; }
-.platform-icon img { width: 23px; height: 23px; object-fit: contain; filter: brightness(0) invert(1); }
+.platform-icon { 
+  position: relative; 
+  flex: 0 0 45px; 
+  width: 45px; 
+  height: 45px; 
+  border-radius: 12px; 
+  display: grid; 
+  place-items: center; 
+  background: #fff; 
+  border: 1px solid #e7e6e2; 
+  color: #111;
+}
+.platform-icon img { 
+  width: 24px; 
+  height: 24px; 
+  object-fit: contain; 
+  filter: none; 
+}
 .platform-links { display: flex; gap: 7px; }
 .platform-links a { padding: 10px 12px; border-radius: 10px; background: #111; color: #fff; font-size: 11px; font-weight: 750; white-space: nowrap; }
 
