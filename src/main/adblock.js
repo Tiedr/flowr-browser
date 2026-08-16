@@ -17,7 +17,18 @@ const BLOCKED_HOSTS = new Set([
 ]);
 
 const TRACKING_PATH = /(?:^|[\/_-])(?:ads?|adserver|advert|analytics|beacon|collect|conversion|pixel|sponsor|telemetry|track(?:er|ing)?)(?:[\/_?.-]|$)/i;
-const FILTERED_TYPES = new Set(['image', 'script', 'stylesheet', 'xhr', 'fetch', 'media', 'subFrame', 'ping']);
+const MAIN_FRAME_TRACKING_PATH = /(?:^|[\/_-])(?:ad(s|vert|server|service)|sponsor|promo|promotion|banner|tracking|analytics|telemetry)(?:[\/_?.-]|$)/i;
+const FILTERED_TYPES = new Set([
+  'mainFrame',
+  'image',
+  'script',
+  'stylesheet',
+  'xhr',
+  'fetch',
+  'media',
+  'subFrame',
+  'ping'
+]);
 
 function normaliseHost(hostname) {
   return String(hostname || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
@@ -51,6 +62,8 @@ function shouldBlockRequest(details, enabled = true) {
   const sourceHost = requestOrigin(details);
   const targetHost = normaliseHost(target.hostname);
   const thirdParty = sourceHost && targetHost !== sourceHost && !targetHost.endsWith(`.${sourceHost}`);
+  const combinedPath = `${target.pathname}${target.search}`;
+  if (type === 'mainFrame' && (!sourceHost || thirdParty) && MAIN_FRAME_TRACKING_PATH.test(combinedPath)) return true;
   return Boolean(thirdParty && TRACKING_PATH.test(`${target.pathname}${target.search}`));
 }
 

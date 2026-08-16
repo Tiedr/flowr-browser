@@ -618,7 +618,10 @@ ipcMain.on('register-webview', (event, id) => {
   if (wc && !wc.isDestroyed()) {
     attachShortcuts(wc);
     wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) createBrandedPopup(url);
+      if (/^https?:\/\//i.test(url)) {
+        const shouldBlockPopup = shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled);
+        if (!shouldBlockPopup) createBrandedPopup(url);
+      }
       return { action: 'deny' };
     });
   }
@@ -964,6 +967,8 @@ ipcMain.handle('open-external', (_event, url) => {
   void shell.openExternal(url);
   return true;
 });
+
+ipcMain.handle('should-block-url', (_event, url) => shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled));
 
 ipcMain.handle('tieddr-sign-in', () => new Promise((resolve) => {
   if (authWin && !authWin.isDestroyed()) { authWin.focus(); return resolve(accountStore.get('account')); }

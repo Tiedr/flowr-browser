@@ -266,7 +266,7 @@ export default function Overlay({ overlay: s, onAction, onClose, onZoom, zoom })
 }
 
 function fill(bg, closing) {
-  return { position: 'fixed', inset: 0, background: bg, zIndex: 1000, ...(REDUCE ? {} : { animation: closing ? `flowFadeOut ${EXIT_MS}ms ${EASE} forwards` : `flowFade 160ms ${EASE} both` }) };
+  return { position: 'fixed', inset: 0, background: bg, zIndex: 1400, ...(REDUCE ? {} : { animation: closing ? `flowFadeOut ${EXIT_MS}ms ${EASE} forwards` : `flowFade 160ms ${EASE} both` }) };
 }
 function isDark(hex) {
   if (!hex) return true;

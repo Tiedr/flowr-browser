@@ -423,19 +423,29 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, men
         <View style={[s.box, { backgroundColor: focused ? theme.glass : theme.strong, borderColor: theme.border }, showInlineSuggestions && !showViewLive && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
           {input.startsWith('https://') ? <Lock size={14} color={theme.success} /> : <Search size={14} color={theme.faint} />}
           <TextInput ref={urlRef} style={[s.url, { color: theme.text }]} value={input} onChangeText={v => { setInput(v); setSelIdx(-1); }}
-            onFocus={() => setFocused(true)} onBlur={() => { if (!clickingSuggestion.current) setTimeout(() => setFocused(false), 150); }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              if (clickingSuggestion.current) {
+                setTimeout(() => { clickingSuggestion.current = false; setFocused(false); }, 120);
+              } else {
+                setTimeout(() => setFocused(false), 150);
+              }
+            }}
             onKeyDown={showInlineSuggestions ? (e) => {
               if (e.key === 'ArrowDown') { e.preventDefault?.(); setSelIdx(i => Math.min(i + 1, suggestions.length - 1)); }
               else if (e.key === 'ArrowUp') { e.preventDefault?.(); setSelIdx(i => Math.max(i - 1, -1)); }
-              else if (e.key === 'Enter' && selIdx >= 0) { e.preventDefault?.(); onNavigateSuggestion(suggestions[selIdx].url); }
+              else if (e.key === 'Enter' && selIdx >= 0) { e.preventDefault?.(); navigateSuggestion(suggestions[selIdx].url); }
               else if (e.key === 'Escape') { setFocused(false); }
             } : undefined}
-            onSubmitEditing={() => go(input)} placeholder="Search or enter website" placeholderTextColor={theme.faint} selectTextOnFocus autoCapitalize="none" />
+            onSubmitEditing={() => { setFocused(false); go(input); }}
+            placeholder="Search or enter website" placeholderTextColor={theme.faint} selectTextOnFocus autoCapitalize="none" />
         </View>
         {showInlineSuggestions && !showViewLive ? (
           <View style={[s.suggestions, { backgroundColor: theme.chrome + 'ee', borderBottomColor: theme.border }]} {...GLASS_HEAVY}>
             {suggestions.map((sg, i) => (
-<TouchableOpacity key={sg.url + i} style={[s.suggestionItem, { borderBottomColor: theme.border + '30' }, i === selIdx && { backgroundColor: theme.accentSoft }]} onPress={() => { clickingSuggestion.current = false; onNavigateSuggestion(sg.url); }} onMouseDown={() => { clickingSuggestion.current = true; }}>
+            <TouchableOpacity key={sg.url + i} style={[s.suggestionItem, { borderBottomColor: theme.border + '30' }, i === selIdx && { backgroundColor: theme.accentSoft }]}
+              onPress={() => { clickingSuggestion.current = false; navigateSuggestion(sg.url); }}
+              onMouseDown={() => { clickingSuggestion.current = true; }}>
                 {sg.favicon ? <Image source={{ uri: sg.favicon }} style={s.suggestionIcon} /> : sg.type === 'bookmark' ? <Star size={14} color={theme.accent} /> : sg.type === 'search' ? <Search size={14} color={theme.muted} /> : <Globe size={14} color={theme.muted} />}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontSize: 13, color: theme.text, fontWeight: '500' }} numberOfLines={1}>{sg.title}</Text>
@@ -1585,10 +1595,38 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
 
     requestAnimationFrame(applySrc);
 
-    const onNav = (e, url) => {
-      if (!url || url === 'about:blank') return;
+    const resolveUrl = (value, fallback = '') => {
+      const candidates = [];
+      if (typeof value === 'string') candidates.push(value);
+      if (typeof value === 'object' && value !== null) {
+        if (typeof value.url === 'string') candidates.push(value.url);
+        if (typeof value.newURL === 'string') candidates.push(value.newURL);
+        if (typeof value.newUrl === 'string') candidates.push(value.newUrl);
+      }
+      if (typeof fallback === 'string') candidates.push(fallback);
+      candidates.push(() => {
+        try { return wv.getURL?.(); } catch (_) { return ''; }
+      });
+
+      for (const candidate of candidates) {
+        const raw = typeof candidate === 'function' ? candidate() : candidate;
+        if (!raw || typeof raw !== 'string' || raw === 'about:blank') continue;
+        try {
+          const parsed = new URL(raw);
+          if (!parsed.protocol || parsed.protocol === 'about:' || parsed.protocol === 'data:' || parsed.protocol === 'javascript:' || parsed.protocol === 'blob:') continue;
+          return parsed.toString();
+        } catch (_) {
+          if (/^(https?:\/\/|mailto:|tel:)/.test(raw)) return raw;
+        }
+      }
+      return '';
+    };
+
+    const updateFromUrl = (value, extra = '') => {
+      const u = resolveUrl(value, extra);
+      if (!u) return;
       try {
-        const parsed = new URL(url);
+        const parsed = new URL(u);
         if (parsed.hostname === 'flowr.tieddr.com' && parsed.pathname === '/store/install-theme.html') {
           const manifest = parsed.searchParams.get('manifest');
           if (manifest) { h().installTheme(manifest, wv); return; }
@@ -1598,15 +1636,23 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
           if (manifest) { h().installFlowrExtension(manifest, wv); return; }
         }
       } catch (_) {}
-      h().updateUrl(tab.id, url); try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {} h().addHistory(url, '');
+
+      h().updateUrl(tab.id, u);
+      try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {}
+      h().addHistory(u, '');
     };
-    const onNavInPage = (e, url) => { if (url && url !== 'about:blank') h().updateUrl(tab.id, url); };
+
+    const onNav = (e, url) => { const u = resolveUrl(url, e?.url || ''); if (!u) return; updateFromUrl(u); };
+    const onNavInPage = (e, url) => { const u = resolveUrl(url, e?.url || ''); if (!u) return; h().updateUrl(tab.id, u); };
+    const onStartNav = (e) => { const u = resolveUrl(e?.url || '', ''); if (u) h().updateUrl(tab.id, u); };
     const onTitle = (e, title) => { if (title) h().updateTitle(tab.id, title); };
     const onFavicon = (e, favicons) => { if (favicons && favicons[0]) h().updateFavicon(tab.id, favicons[0]); };
     const onStartLoad = () => h().updateLoading(tab.id, true);
     const onStopLoad = () => {
       h().updateLoading(tab.id, false);
       try { const t = wv.getTitle(); if (t) h().updateTitle(tab.id, t); } catch (_) {}
+      const finalUrl = resolveUrl(wv.getURL?.() || '', '');
+      if (finalUrl && finalUrl !== 'about:blank') h().updateUrl(tab.id, finalUrl);
       try {
         wv.executeJavaScript(`(function(){var l=document.querySelector('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]');return l?l.href:null})()`).then(fav => {
           if (fav) h().updateFavicon(tab.id, fav);
@@ -1622,7 +1668,15 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
     const onCtx = (e, params) => {
       h().contextMenu({ ...contextParams(params), x: params.x + host.getBoundingClientRect().left, y: params.y + host.getBoundingClientRect().top });
     };
-    const onNewWin = (e, url) => { e.preventDefault(); if (url) h().newTab(url); };
+    const onNewWin = async (e, url) => {
+      e.preventDefault();
+      if (!url) return;
+      try {
+        const blocked = await ipc?.invoke('should-block-url', url);
+        if (blocked) return;
+      } catch (_) {}
+      h().newTab(url);
+    };
     const onDomReady = () => {
       try { h().register(wv.getWebContentsId()); } catch (_) {}
       sizeGuest();
@@ -1630,6 +1684,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
 
     wv.addEventListener('did-navigate', onNav);
     wv.addEventListener('did-navigate-in-page', onNavInPage);
+    wv.addEventListener('did-start-navigation', onStartNav);
     wv.addEventListener('page-title-updated', onTitle);
     wv.addEventListener('page-favicon-updated', onFavicon);
     wv.addEventListener('did-start-loading', onStartLoad);
@@ -1644,6 +1699,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
       resizeObserver.disconnect();
       wv.removeEventListener('did-navigate', onNav);
       wv.removeEventListener('did-navigate-in-page', onNavInPage);
+      wv.removeEventListener('did-start-navigation', onStartNav);
       wv.removeEventListener('page-title-updated', onTitle);
       wv.removeEventListener('page-favicon-updated', onFavicon);
       wv.removeEventListener('did-start-loading', onStartLoad);
@@ -2040,6 +2096,9 @@ export default function App() {
 
   // Build a context menu from the params reported by main, and open it as glass.
   const openContext = useCallback((p) => {
+    setNavFocused(false);
+    setNavSelIdx(-1);
+    setExtPanelOpen(false);
     const items = [];
     const sep = () => items.push({ type: 'sep' });
     if (p.isEditable) {
@@ -2070,6 +2129,18 @@ export default function App() {
     const x = p.x;
     const y = p.y;
     setOverlay({ kind: 'context', theme, x, y, items, width: 244 });
+  }, []);
+
+  // Any right-click should close top chrome dropdowns, so context menus are never
+  // hidden behind address-bar suggestion overlays.
+  useEffect(() => {
+    const onContextMenu = () => {
+      setNavFocused(false);
+      setNavSelIdx(-1);
+      setExtPanelOpen(false);
+    };
+    document.addEventListener('contextmenu', onContextMenu);
+    return () => document.removeEventListener('contextmenu', onContextMenu);
   }, []);
 
   // Execute an action reported back from the overlay window.

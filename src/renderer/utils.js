@@ -113,11 +113,14 @@ function trunc(t, n = 32) { t = (t || '').replace(/\s+/g, ' ').trim(); return t.
 
 function storeIdOf(u) {
   try {
-    const { hostname, pathname } = new URL(u);
-    const isStore = /(^|\.)chromewebstore\.google\.com$/.test(hostname) || (/(^|\.)chrome\.google\.com$/.test(hostname) && pathname.includes('/webstore/'));
-    if (!isStore || !/\/detail\//.test(pathname)) return null;
-    const m = pathname.match(/[a-p]{32}/);
-    return m ? m[0] : null;
+    const { hostname, pathname, search } = new URL(u);
+    const host = hostname.replace(/^www\./, '');
+    const isStore = /(^|\.)chromewebstore\.google\.com$/.test(host) || (/(^|\.)chrome\.google\.com$/.test(host) && pathname.includes('/webstore/'));
+    if (!isStore) return null;
+    const params = new URLSearchParams(search);
+    const matchSource = `${pathname} ${params.get('id') || ''} ${search}`;
+    const m = matchSource.match(/[a-p]{32}/i);
+    return m ? m[0].toLowerCase() : null;
   } catch { return null; }
 }
 
