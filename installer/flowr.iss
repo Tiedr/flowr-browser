@@ -1,5 +1,5 @@
 #define MyAppName "Flowr"
-#define MyAppVersion "1.1.3"
+#define MyAppVersion "1.1.4"
 [Setup]
 AppId={{A12C0CB9-4DCE-4F43-A860-9E73B94A87F6}
 AppName={#MyAppName}
@@ -10,9 +10,9 @@ AppSupportURL=https://flowr.tieddr.com
 DefaultDirName={autopf}\Flowr
 DefaultGroupName=Flowr
 DisableProgramGroupPage=yes
-OutputDir=..\release_flowr_113
-OutputBaseFilename=Flowr-Installer-1.1.3
-SetupIconFile=..\release_flowr_113\.icon-ico\icon.ico
+OutputDir=..\release_v5
+OutputBaseFilename=Flowr-Installer-1.1.4
+SetupIconFile=..\release_v5\.icon-ico\icon.ico
 UninstallDisplayIcon={app}\Flowr.exe
 Compression=lzma2/fast
 SolidCompression=yes
@@ -31,7 +31,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts"; Flags: checkedonce
 [Files]
-Source: "..\release_flowr_113\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\release_v5\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "flowr-welcome.bmp"; Flags: dontcopy
 [Icons]
 Name: "{autoprograms}\Flowr"; Filename: "{app}\Flowr.exe"
@@ -136,7 +136,7 @@ begin
     StageTitle.Caption := 'Building your browser.';
     StageBody.Caption := 'Installing the optimized browser engine, private browsing tools and your Tieddr integrations. This normally takes less than a minute.';
     StagePercent.Caption := 'PREPARING';
-    StageRightEyebrow.Caption := 'FLOWR  /  1.1.3';
+    StageRightEyebrow.Caption := 'FLOWR  /  1.1.4';
     StageRightTitle.Caption := 'Private.' + #13#10 + 'Personal.' + #13#10 + 'Yours.';
     StageRightBody.Caption := 'Optimized Chromium engine' + #13#10 + 'Tieddr Vault + Space' + #13#10 + 'Mavis built in';
     WizardForm.ProgressGauge.Visible := True;

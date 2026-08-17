@@ -836,10 +836,11 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
   const [name, setName] = useState('');
   const [updateStatus, setUpdateStatus] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  useEffect(() => ipc?.on('update-status', status => setUpdateStatus(status)), []);
   const checkUpdate = async () => {
     setCheckingUpdate(true);
-    const result = await ipc?.invoke('check-for-updates');
-    setUpdateStatus(result || { ok: false, error: 'Update service unavailable' });
+    const result = await ipc?.invoke('check-for-updates', { promptOnAvailable: false, backgroundDownload: false });
+    setUpdateStatus(result || { phase: 'error', error: 'Update service unavailable' });
     setCheckingUpdate(false);
   };
   const S = SET_SECTIONS.find(x => x.id === section) || SET_SECTIONS[0];
@@ -1144,9 +1145,10 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
               <ArrowUpCircle size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>{checkingUpdate ? 'Checking…' : 'Check for updates now'}</Text>
             </TouchableOpacity>
             {updateStatus ? <View style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: updateStatus.available ? theme.accentSoft : theme.soft, borderWidth: 1, borderColor: updateStatus.available ? theme.accent : theme.border }}>
-              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>{!updateStatus.ok ? 'Could not check for updates' : updateStatus.available ? `Flowr ${updateStatus.latestVersion} is ready` : 'You’re up to date'}</Text>
-              <Text style={{ color: theme.muted, fontSize: 12.5, marginTop: 4 }}>{!updateStatus.ok ? updateStatus.error : updateStatus.available ? `You have ${updateStatus.currentVersion}. Download the latest secure release.` : `Flowr ${updateStatus.currentVersion} is the latest release.`}</Text>
-              {updateStatus.available ? <TouchableOpacity onPress={() => ipc?.invoke('open-external', updateStatus.downloadUrl)} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Download update</Text></TouchableOpacity> : null}
+              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>{updateStatus.phase === 'error' ? 'Could not check for updates' : updateStatus.phase === 'development' ? 'Packaged builds only' : updateStatus.phase === 'downloading' ? `Downloading Flowr ${updateStatus.latestVersion}…` : updateStatus.phase === 'downloaded' ? 'Update ready to install' : updateStatus.available ? `Flowr ${updateStatus.latestVersion} is ready` : 'You’re up to date'}</Text>
+              <Text style={{ color: theme.muted, fontSize: 12.5, marginTop: 4 }}>{updateStatus.phase === 'error' || updateStatus.phase === 'development' ? updateStatus.error : updateStatus.phase === 'downloading' ? `${Math.round(updateStatus.percent || 0)}% downloaded. Keep Flowr open while the update finishes.` : updateStatus.phase === 'downloaded' ? (updateStatus.installOnQuit ? 'Flowr will install the update automatically when you close the browser.' : 'Restart Flowr to finish installing the downloaded update.') : updateStatus.available ? `You have ${updateStatus.currentVersion}. Flowr can download and install the update for you.` : `Flowr ${updateStatus.currentVersion || APP_VERSION} is the latest release.`}</Text>
+              {updateStatus.available && updateStatus.phase === 'available' ? <TouchableOpacity onPress={() => ipc?.invoke('download-update')} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Download and install</Text></TouchableOpacity> : null}
+              {updateStatus.phase === 'downloaded' && !updateStatus.installOnQuit ? <TouchableOpacity onPress={() => ipc?.invoke('install-update')} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Restart and install</Text></TouchableOpacity> : null}
             </View> : null}
           </Card>
           <Card title="Release notes" icon={BookOpen} theme={theme}>
@@ -1894,7 +1896,10 @@ export default function App() {
     setBookmarks(b || []); setHistory(h || []); setDownloads(d || []);
     setProfiles(p || []); setActiveProfile(a || 'default'); setExtensions(e || []); setFolders(f || []);
     setNotes(n || []); setNoteFolders(nf || []);
-    if (r?.autoUpdate !== false) ipc.invoke('check-for-updates').then(result => {
+    if (r?.autoUpdate !== false) ipc.invoke('check-for-updates', {
+      promptOnAvailable: r?.backgroundUpdateDownload !== true,
+      backgroundDownload: r?.backgroundUpdateDownload === true
+    }).then(result => {
       if (result?.available) console.info(`[Flowr] Update ${result.latestVersion} is available`);
     }).catch(() => {});
     // Trigger a background Tieddr Space sync on load — if the user is

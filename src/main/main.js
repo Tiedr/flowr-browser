@@ -12,9 +12,11 @@ const { pathToFileURL } = require('url');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
 const Store = require('./store');
 const { parseExtensionId, installStoreExtension } = require('./crx');
 const { shouldBlockRequest } = require('./adblock');
+const { createUpdateController } = require('./updater');
 // Tieddr Vault — password manager + Tieddr Wallet, synced to the encrypted mirror.
 const vault = require('./vault');
 const vaultAccount = require('./vault/account');
@@ -24,7 +26,7 @@ const { APPWRITE } = require('./vault/config');
 const TIEDDR_ACCOUNT_BASE = 'https://account.tieddr.com';
 const TIEDDR_API_BASE = 'https://api.account.tieddr.com';
 const TIEDDR_SPACE_BASE = 'https://space.tieddr.com';
-const FLOWR_RELEASES_API = 'https://api.github.com/repos/Tiedr/flowr-browser/releases/latest';
+const APP_ICON_PATH = path.join(__dirname, '../../build/icons/flowr-transparent.png');
 // OAuth client registered on account.tieddr.com/apps for "Flow" — trusted
 // first-party app, redirect_uri below matches EXACTLY what's registered.
 const TIEDDR_CLIENT_ID = 'client_ohHEAmTYYKNYVdE6';
@@ -203,6 +205,14 @@ function send(channel, ...args) {
   }
 }
 
+const updateController = createUpdateController({
+  app,
+  autoUpdater,
+  dialog,
+  send,
+  getWindow: () => mainWindow
+});
+
 function createBrandedPopup(url) {
   if (!/^https?:\/\//i.test(url || '')) return;
   const popup = new BrowserWindow({
@@ -212,7 +222,7 @@ function createBrandedPopup(url) {
     minHeight: 420,
     show: false,
     title: `Flowr — ${new URL(url).hostname}`,
-    icon: path.join(__dirname, '../../flowricondark.png'),
+    icon: APP_ICON_PATH,
     backgroundColor: '#111111',
     webPreferences: {
       session: browsingSession || session.defaultSession,
@@ -427,7 +437,7 @@ function createWindow() {
     center: true,
     transparent: false,
     backgroundColor: '#f6f7fb',
-    icon: path.join(__dirname, '../../flowricondark.png'),
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -531,6 +541,7 @@ app.whenReady().then(async () => {
   browsingSession = INCOGNITO ? session.fromPartition('flow-incognito') : session.fromPartition('persist:flow-main');
   configureSession(browsingSession);
   createWindow();
+  if (!INCOGNITO) updateController.initialize();
 
   // Under genuine system pressure, ask the renderer to release all inactive
   // tab guests immediately rather than waiting for the normal idle timeout.
@@ -937,30 +948,10 @@ ipcMain.handle('get-account', async () => {
   return refreshed;
 });
 
-function compareVersions(a, b) {
-  const pa = String(a).replace(/^v/, '').split('.').map(Number);
-  const pb = String(b).replace(/^v/, '').split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d) return d;
-  }
-  return 0;
-}
-
-ipcMain.handle('check-for-updates', async () => {
-  const currentVersion = app.getVersion();
-  try {
-    const res = await fetch(FLOWR_RELEASES_API, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': `Flowr/${currentVersion}` } });
-    if (!res.ok) throw new Error(`Update service returned ${res.status}`);
-    const release = await res.json();
-    const latestVersion = String(release.tag_name || '').replace(/^v/, '');
-    const assets = Array.isArray(release.assets) ? release.assets : [];
-    const asset = assets.find(a => /installer.*\.exe$/i.test(a.name)) || assets.find(a => /windows.*\.zip$/i.test(a.name));
-    return { ok: true, currentVersion, latestVersion, available: compareVersions(latestVersion, currentVersion) > 0, releaseUrl: release.html_url, downloadUrl: asset?.browser_download_url || release.html_url, notes: release.body || '', publishedAt: release.published_at };
-  } catch (error) {
-    return { ok: false, currentVersion, error: error?.message || 'Could not check for updates' };
-  }
-});
+ipcMain.handle('check-for-updates', (_event, options) => updateController.check(options || {}));
+ipcMain.handle('download-update', () => updateController.download());
+ipcMain.handle('install-update', () => updateController.install());
+ipcMain.handle('get-update-status', () => updateController.status());
 
 ipcMain.handle('open-external', (_event, url) => {
   if (!/^https:\/\//i.test(String(url || ''))) return false;

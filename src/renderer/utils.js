@@ -1,7 +1,8 @@
 import React from 'react';
 import { Image } from 'react-native';
 import { Shield, Settings, Bookmark, FileText, History, Download, Puzzle, Globe } from 'lucide-react';
-import logo from '../../flowricondark.png';
+import logo from '../../build/icons/flowr-transparent.png';
+import packageInfo from '../../package.json';
 import vaultLogo from '../../vaultmark.png';
 import bgAbstract from '../assets/backgrounds/abstract-glass.png';
 import bgNature from '../assets/backgrounds/nature-aurora.png';
@@ -19,7 +20,7 @@ const ipc = window.electron?.ipcRenderer;
 const CHROME_H = 92;
 const BANNER_H = 60;
 const FIND_H = 48;
-const APP_VERSION = '1.1.2';
+const APP_VERSION = packageInfo.version;
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const T_BG = { transitionProperty: 'background-color, border-color, opacity', transitionDuration: '160ms', transitionTimingFunction: EASE };
 const HOVER = { hoverable: '1' };
