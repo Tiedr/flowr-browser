@@ -6,7 +6,7 @@ console.warn = _safeLog(_origWarn);
 console.error = _safeLog(_origError);
 process.on('uncaughtException', (err) => { if (err.code !== 'EPIPE') console.error('Uncaught exception:', err); });
 
-const { app, BrowserWindow, ipcMain, shell, session, dialog, Menu, clipboard, safeStorage, webContents } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, session, dialog, clipboard, safeStorage, webContents, screen } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const crypto = require('crypto');
@@ -77,6 +77,8 @@ const SETTINGS_DEFAULTS = {
   historyRetention: 'forever',
   autoClearSites: '',
   clearPrivateDataOnExit: false,
+  blockUnpromptedPasskeys: true,
+  askBeforeIdentityRedirect: true,
   hardwareAcceleration: true,
   aiSuggestions: true,
   reduceMotion: false,
@@ -124,6 +126,7 @@ let trackerBlockingEnabled = settingsStore.get('blockTrackers') !== false;
 let adBlockerEnabled = settingsStore.get('adBlocker') !== false;
 let clipboardClearTimeout = null;
 let memoryPressureInterval = null;
+let contextMenuWindow = null;
 
 const downloadItems = new Map();
 const downloadPersistAt = new Map();
@@ -470,38 +473,92 @@ function addToHistory(url, title) {
   send('history-changed', settingsStore.get('historyLock') && !vault.isUnlocked() ? [] : next);
 }
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
 function showSiteContextMenu(wc, params) {
-  const template = [];
+  if (contextMenuWindow && !contextMenuWindow.isDestroyed()) contextMenuWindow.close();
+  const items = [];
+  const action = (label, icon, click, hint = '', disabled = false) => items.push({ label, icon, click, hint, disabled });
+  const separator = () => items.push({ separator: true });
   if (params.isEditable) {
-    template.push(
-      { label: 'Undo', enabled: !!params.editFlags?.canUndo, click: () => wc.undo() }, { label: 'Redo', enabled: !!params.editFlags?.canRedo, click: () => wc.redo() }, { type: 'separator' },
-      { label: 'Cut', enabled: !!params.editFlags?.canCut, click: () => wc.cut() }, { label: 'Copy', enabled: !!params.editFlags?.canCopy, click: () => wc.copy() },
-      { label: 'Paste', enabled: !!params.editFlags?.canPaste, click: () => wc.paste() }, { label: 'Select all', click: () => wc.selectAll() }
-    );
+    action('Undo', '↶', () => wc.undo(), 'Ctrl+Z', !params.editFlags?.canUndo);
+    action('Redo', '↷', () => wc.redo(), 'Ctrl+Y', !params.editFlags?.canRedo); separator();
+    action('Cut', '✂', () => wc.cut(), 'Ctrl+X', !params.editFlags?.canCut);
+    action('Copy', '▣', () => wc.copy(), 'Ctrl+C', !params.editFlags?.canCopy);
+    action('Paste', '▤', () => wc.paste(), 'Ctrl+V', !params.editFlags?.canPaste);
+    action('Select all', '⌗', () => wc.selectAll(), 'Ctrl+A');
   } else {
-    if (params.linkURL) template.push(
-      { label: 'Open link in new tab', click: () => send('open-url-in-new-tab', params.linkURL) },
-      { label: 'Copy link address', click: () => clipboard.writeText(params.linkURL) }, { type: 'separator' }
-    );
-    if (params.mediaType === 'image' && params.srcURL) template.push(
-      { label: 'Open image in new tab', click: () => send('open-url-in-new-tab', params.srcURL) },
-      { label: 'Save image as…', click: () => wc.downloadURL(params.srcURL) }, { type: 'separator' }
-    );
-    if (params.selectionText) template.push(
-      { label: 'Copy', click: () => wc.copy() },
-      { label: `Search for “${params.selectionText.slice(0, 36)}”`, click: () => send('open-url-in-new-tab', searchUrl(params.selectionText)) },
-      { type: 'separator' }
-    );
-    template.push(
-      { label: 'Back', enabled: wc.canGoBack(), click: () => wc.goBack() },
-      { label: 'Forward', enabled: wc.canGoForward(), click: () => wc.goForward() },
-      { label: 'Reload', click: () => wc.reload() }, { type: 'separator' },
-      { label: 'Save page as…', click: () => wc.savePage(path.join(app.getPath('downloads'), 'page.html'), 'HTMLComplete').catch(() => {}) },
-      { label: 'Print…', click: () => wc.print() }
-    );
-    if (settingsStore.get('devTools') !== false) template.push({ type: 'separator' }, { label: 'Inspect', click: () => wc.inspectElement(params.x, params.y) });
+    if (params.linkURL) {
+      action('Open link in new tab', '↗', () => send('open-url-in-new-tab', params.linkURL));
+      action('Open link in new window', '▣', () => createBrandedPopup(params.linkURL)); separator();
+      action('Save link as…', '↓', () => wc.downloadURL(params.linkURL));
+      action('Copy link address', '⧉', () => clipboard.writeText(params.linkURL)); separator();
+    }
+    if (params.mediaType === 'image' && params.srcURL) {
+      action('Open image in new tab', '▧', () => send('open-url-in-new-tab', params.srcURL));
+      action('Save image as…', '↓', () => wc.downloadURL(params.srcURL));
+      action('Copy image', '⧉', () => wc.copyImageAt(params.x, params.y));
+      action('Copy image address', '⌁', () => clipboard.writeText(params.srcURL)); separator();
+    }
+    if (params.selectionText) {
+      action('Copy', '⧉', () => wc.copy(), 'Ctrl+C');
+      action(`Search for “${params.selectionText.slice(0, 30)}”`, '⌕', () => send('open-url-in-new-tab', searchUrl(params.selectionText))); separator();
+    }
+    if (!params.linkURL && params.mediaType !== 'image') {
+      action('Back', '←', () => wc.goBack(), 'Alt+Left', !wc.canGoBack());
+      action('Forward', '→', () => wc.goForward(), 'Alt+Right', !wc.canGoForward());
+      action('Reload', '↻', () => wc.reload(), 'Ctrl+R'); separator();
+    }
+    action('Ask Mavis about this page', '✦', () => send('open-mavis-sidebar')); separator();
+    action('Save as…', '↓', () => {
+      void dialog.showSaveDialog(mainWindow, { title: 'Save page as', defaultPath: 'page.html', filters: [{ name: 'Web page, complete', extensions: ['html'] }] })
+        .then(({ canceled, filePath }) => { if (!canceled && filePath) return wc.savePage(filePath, 'HTMLComplete'); }).catch(() => {});
+    }, 'Ctrl+S');
+    action('Print…', '▤', () => wc.print(), 'Ctrl+P');
+    action('Open in reading mode', '◫', () => wc.executeJavaScript(READER_JS).catch(() => {})); separator();
+    let pageUrl = ''; try { pageUrl = wc.getURL(); } catch (_) {}
+    if (pageUrl) action('View page source', '‹›', () => send('open-url-in-new-tab', `view-source:${pageUrl}`), 'Ctrl+U');
+    if (settingsStore.get('devTools') !== false) action('Inspect', '⌘', () => wc.inspectElement(params.x, params.y));
   }
-  Menu.buildFromTemplate(template).popup({ window: mainWindow });
+
+  const callbacks = new Map();
+  let index = 0;
+  const rows = items.map(item => {
+    if (item.separator) return '<div class="sep"></div>';
+    const id = String(index++); callbacks.set(id, item.click);
+    return `<a class="item${item.disabled ? ' disabled' : ''}" href="flowr-menu://action/${id}"><span class="ico">${escapeHtml(item.icon)}</span><span class="label">${escapeHtml(item.label)}</span><span class="hint">${escapeHtml(item.hint)}</span></a>`;
+  }).join('');
+  const height = Math.min(640, items.reduce((sum, item) => sum + (item.separator ? 13 : 38), 14));
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor).workArea;
+  const width = 334;
+  const x = Math.max(display.x + 6, Math.min(cursor.x, display.x + display.width - width - 6));
+  const y = Math.max(display.y + 6, Math.min(cursor.y, display.y + display.height - height - 6));
+  contextMenuWindow = new BrowserWindow({
+    parent: mainWindow, frame: false, transparent: true, resizable: false, movable: false,
+    minimizable: false, maximizable: false, skipTaskbar: true, show: false, x, y, width, height,
+    backgroundColor: '#00000000', roundedCorners: true, hasShadow: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  contextMenuWindow.setAlwaysOnTop(true, 'pop-up-menu');
+  const html = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; navigate-to flowr-menu:"><style>
+    *{box-sizing:border-box}html,body{margin:0;background:transparent;color:#f5f8f7;font:13px/1.25 Inter,Segoe UI,sans-serif;overflow:hidden}
+    body{padding:3px}.menu{padding:7px 0;border:1px solid rgba(210,255,242,.16);border-radius:14px;overflow:hidden;background:linear-gradient(145deg,rgba(18,27,27,.95),rgba(10,17,19,.97));box-shadow:0 22px 60px rgba(0,0,0,.58),inset 0 1px rgba(255,255,255,.08)}
+    .menu:before{content:'';position:absolute;inset:4px;border-radius:12px;pointer-events:none;background:linear-gradient(120deg,rgba(201,255,81,.035),transparent 36%,rgba(107,222,255,.035));}
+    .item{position:relative;height:38px;padding:0 15px;display:flex;align-items:center;gap:11px;color:#f5f8f7;text-decoration:none}.item:hover{background:rgba(201,255,81,.10)}.item.disabled{opacity:.35;pointer-events:none}
+    .ico{width:18px;text-align:center;color:#c9ff51;font-size:15px}.label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hint{color:#a9b9b5;font-size:11px}.sep{height:1px;margin:6px 0;background:rgba(196,230,220,.17)}
+  </style><div class="menu">${rows}</div>`;
+  contextMenuWindow.webContents.on('will-navigate', (event, target) => {
+    event.preventDefault();
+    const match = /^flowr-menu:\/\/action\/(\d+)$/.exec(target);
+    if (match && callbacks.has(match[1])) { try { callbacks.get(match[1])(); } catch (_) {} }
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) contextMenuWindow.close();
+  });
+  contextMenuWindow.on('blur', () => { if (contextMenuWindow && !contextMenuWindow.isDestroyed()) contextMenuWindow.close(); });
+  contextMenuWindow.on('closed', () => { contextMenuWindow = null; });
+  void contextMenuWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).then(() => contextMenuWindow?.show());
 }
 
 async function loadStoredExtensions() {
@@ -727,6 +784,9 @@ app.on('before-quit', () => {
 
 // Absolute file:// URL of the per-page preload (password/wallet autofill).
 ipcMain.handle('get-view-preload', () => pathToFileURL(path.join(__dirname, 'viewpreload.js')).href);
+ipcMain.on('privacy-web-preferences', event => {
+  event.returnValue = { blockUnpromptedPasskeys: settingsStore.get('blockUnpromptedPasskeys') !== false };
+});
 
 // Renderer reports a navigation so we can persist history (skipped in incognito).
 ipcMain.on('add-history', (event, url, title) => addToHistory(url, title));
@@ -753,6 +813,19 @@ ipcMain.on('register-webview', (event, id) => {
         if (/^https?:\/\//i.test(url)) addToHistory(url, title);
       });
       wc.on('context-menu', (_event, params) => showSiteContextMenu(wc, params));
+      wc.on('will-redirect', (event, url) => {
+        if (!settingsStore.get('askBeforeIdentityRedirect')) return;
+        let destination = '';
+        try { destination = new URL(url).hostname.toLowerCase(); } catch (_) { return; }
+        if (!/(^|\.)(accounts\.google\.com|login\.microsoftonline\.com|appleid\.apple\.com)$/.test(destination)) return;
+        event.preventDefault();
+        void dialog.showMessageBox(mainWindow, {
+          type: 'question', title: 'Identity redirect blocked',
+          message: `Allow this page to continue to ${destination}?`,
+          detail: 'Flowr stopped the redirect before an external account page could load.',
+          buttons: ['Stay on this page', 'Allow redirect'], defaultId: 0, cancelId: 0, noLink: true
+        }).then(result => { if (result.response === 1 && !wc.isDestroyed()) wc.loadURL(url); }).catch(() => {});
+      });
     }
     wc.setWindowOpenHandler(({ url }) => {
       if (/^https?:\/\//i.test(url)) {

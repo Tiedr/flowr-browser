@@ -374,7 +374,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
   );
 }
 
-function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, menu, bookmark, bookmarked, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
+function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, home, menu, bookmark, bookmarked, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
   const themeRef = useRef(theme); themeRef.current = theme;
   const prevSugsRef = useRef('');
   const ddOpenRef = useRef(false);
@@ -415,7 +415,7 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, men
         <I icon={ArrowLeft} label="Back" onPress={back} theme={theme} />
         <I icon={ArrowRight} label="Forward" onPress={forward} theme={theme} />
         {loading
-          ? <I icon={X} label="Stop" onPress={() => ipc?.send('view-command', 'stop')} theme={theme} />
+          ? <I icon={X} label="Stop" onPress={stop} theme={theme} />
           : <I icon={RotateCcw} label="Reload" onPress={reload} theme={theme} />}
         <I icon={Home} label="Home" onPress={home} theme={theme} />
       </View>
@@ -914,6 +914,8 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             <Toggle label={'Send \u201CDo Not Track\u201D request'} detail="Ask sites not to track your browsing." value={!!settings.doNotTrack} onPress={() => update({ doNotTrack: !settings.doNotTrack })} theme={theme} />
             <Toggle label="Fingerprint spoofing" detail="Reduce browser fingerprinting by reporting generic hardware info." value={!!settings.fingerprintProtection} onPress={() => update({ fingerprintProtection: !settings.fingerprintProtection })} theme={theme} />
             <Toggle label="Referrer policy" detail="Send a reduced referrer header to sites." value={!!settings.reducedReferrer} onPress={() => update({ reducedReferrer: !settings.reducedReferrer })} theme={theme} />
+            <Toggle label="Block unprompted passkeys" detail="Prevent sites from opening passkey or security-key prompts until you turn this off." value={settings.blockUnpromptedPasskeys !== false} onPress={() => update({ blockUnpromptedPasskeys: settings.blockUnpromptedPasskeys === false })} theme={theme} />
+            <Toggle label="Ask before account redirects" detail="Stop unexpected redirects to Google, Microsoft, or Apple sign-in pages and ask first." value={settings.askBeforeIdentityRedirect !== false} onPress={() => update({ askBeforeIdentityRedirect: settings.askBeforeIdentityRedirect === false })} theme={theme} />
           </Card>
           <Card title="Private history" icon={History} theme={theme}>
             <Toggle label="Encrypt history on this device" detail="Protect the local history database with the operating system keychain." value={settings.privateHistory !== false} onPress={() => update({ privateHistory: settings.privateHistory === false })} theme={theme} />
@@ -2262,6 +2264,7 @@ export default function App() {
     listen('profile-changed', load);
     listen('show-context-menu', p => openContext(p));
     listen('open-url-in-new-tab', url => { if (url) openWebTab(url); });
+    listen('open-mavis-sidebar', () => setSidePanel({ open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito }));
     listen('account-changed', a => { setAccount(a || null); setTimeout(load, 150); ipc.invoke('vault-state').then(v => setVaultState(v || { linked: false, unlocked: false, hasVault: false })); });
     listen('vault-locked', () => { setVaultState(v => ({ ...v, unlocked: false })); setVaultItems([]); });
     listen('side-panel-opened', info => setSidePanel({ open: true, extId: info?.extId || null, url: info?.url || null, width: info?.width || 400, incognito: !!info?.incognito }));
@@ -2393,7 +2396,7 @@ export default function App() {
     <View style={[s.app, { backgroundColor: theme.bg }]}>
       <View style={[s.chrome, { backgroundColor: theme.chrome + 'cc', borderBottomColor: theme.border + '60', zIndex: 1001 }]} {...GLASS_HEAVY}>
         <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
-        <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked}
+        <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked}
           pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} bookmarks={bookmarks} history={history} theme={theme}
           extPanelOpen={extPanelOpen} setExtPanelOpen={setExtPanelOpen} extActs={extActs} clickExt={clickExt} openPage={openPage} toggleExtension={toggleExtension} pinExt={pinExt} showViewLive={showViewLive} ddCooldownRef={navDdCooldownRef} urlWrapRef={urlWrapRef}
           focused={navFocused} setFocused={setNavFocused} selIdx={navSelIdx} setSelIdx={setNavSelIdx} clickingSuggestion={navClickingSuggestion}
@@ -2569,8 +2572,8 @@ const s = StyleSheet.create({
   pill: { height: 28, borderRadius: 7, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }, pillText: { fontSize: 12, fontWeight: '600' },
   empty: { borderWidth: 1, borderRadius: 12, padding: 32, alignItems: 'center' },
   ei: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }, et: { fontSize: 15, fontWeight: '600', marginBottom: 6 }, ed: { fontSize: 13.5, textAlign: 'center', lineHeight: 20, maxWidth: 360 },
-  card: { borderRadius: 12, borderWidth: 1, padding: 18, marginBottom: 12 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 16 }, cardBody: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  card: { borderRadius: 16, borderWidth: 1, padding: 22, marginBottom: 16, boxShadow: '0 18px 50px rgba(3,10,14,0.14), inset 0 1px 0 rgba(255,255,255,0.07)' },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 }, cardBody: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   theme: { width: 200, borderRadius: 11, borderWidth: 1.5, padding: 12, position: 'relative' }, themeCheck: { position: 'absolute', top: 10, right: 10 },
   swatch: { height: 44, borderRadius: 8, borderWidth: 1, marginBottom: 10 }, thn: { fontSize: 13.5, fontWeight: '600', marginBottom: 3 }, thd: { fontSize: 12, lineHeight: 16 },
   toggle: { width: '100%', borderWidth: 1, borderRadius: 10, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 8 },
@@ -2589,16 +2592,16 @@ const s = StyleSheet.create({
   primary: { height: 40, borderRadius: 9, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }, primaryText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   action: { height: 36, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }, actionText: { fontSize: 12.5, fontWeight: '600' },
   setWrap: { flex: 1, flexDirection: 'row' },
-  setSide: { width: 262, borderRightWidth: 1, paddingHorizontal: 10, paddingTop: 14 },
+  setSide: { width: 276, borderRightWidth: 1, paddingHorizontal: 12, paddingTop: 14 },
   setBrand: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 8, marginBottom: 12 }, setBrandText: { fontSize: 15, fontWeight: '700' },
   setAccountBar: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 10, borderWidth: 1, marginBottom: 10, marginHorizontal: 2 },
   setSearch: { height: 34, borderRadius: 8, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, marginBottom: 12, marginHorizontal: 2 },
   setSearchInput: { flex: 1, height: '100%', fontSize: 13, outlineStyle: 'none' },
   setGroup: { fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, paddingHorizontal: 10, marginTop: 10, marginBottom: 4 },
   setItem: { minHeight: 34, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 1 }, setItemText: { flex: 1, fontSize: 13, fontWeight: '550' },
-  setMain: { flex: 1 }, setMainIn: { padding: 34, maxWidth: 860, width: '100%' },
-  setHero: { marginBottom: 24 },
-  setHeroTitle: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4 }, setHeroHint: { fontSize: 13.5, marginTop: 4 },
+  setMain: { flex: 1 }, setMainIn: { paddingHorizontal: 46, paddingVertical: 36, maxWidth: 1240, width: '100%', alignSelf: 'center' },
+  setHero: { marginBottom: 28, maxWidth: 920 },
+  setHeroTitle: { fontSize: 26, fontWeight: '700', letterSpacing: -0.6 }, setHeroHint: { fontSize: 14, marginTop: 6, lineHeight: 21 },
   extDropdown: { position: 'absolute', top: '100%', right: 0, width: 280, borderRadius: 10, borderWidth: 1, overflow: 'hidden', zIndex: 1000 },
   extDropdownHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1 },
   extDropdownTitle: { fontSize: 13, fontWeight: '600' },

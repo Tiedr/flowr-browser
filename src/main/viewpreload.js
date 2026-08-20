@@ -3,6 +3,24 @@
 // exposes anything to the page — no contextBridge, just DOM + ipc.
 const { ipcRenderer } = require('electron');
 
+// Chromium can surface conditional passkey UI before a user explicitly asks
+// for it. Flowr blocks WebAuthn credential requests by default; the user can
+// opt back in from Privacy settings.
+try {
+  const privacy = ipcRenderer.sendSync('privacy-web-preferences') || {};
+  if (privacy.blockUnpromptedPasskeys && navigator.credentials) {
+    const credentials = navigator.credentials;
+    const originalGet = credentials.get.bind(credentials);
+    Object.defineProperty(credentials, 'get', {
+      configurable: true,
+      value: options => {
+        if (options && options.publicKey) return Promise.reject(new DOMException('Passkeys are blocked by Flowr Privacy.', 'NotAllowedError'));
+        return originalGet(options);
+      }
+    });
+  }
+} catch (_) {}
+
 function findFields() {
   const pw = [...document.querySelectorAll('input[type="password"]')].find(el => el.offsetParent !== null);
   if (!pw) return null;
