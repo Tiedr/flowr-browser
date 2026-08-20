@@ -374,7 +374,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
   );
 }
 
-function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, home, menu, bookmark, bookmarked, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
+function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, home, menu, bookmark, bookmarked, updateStatus, onUpdate, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
   const themeRef = useRef(theme); themeRef.current = theme;
   const prevSugsRef = useRef('');
   const ddOpenRef = useRef(false);
@@ -482,8 +482,12 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, hom
           />
         )}
       </View>
-<View style={[s.navDivider, { backgroundColor: theme.border }]} />
+      <View style={[s.navDivider, { backgroundColor: theme.border }]} />
       <I icon={Star} label="Bookmark" onPress={bookmark} solid={bookmarked} theme={theme} />
+      {updateStatus?.available ? <View style={{ position: 'relative' }}>
+        <I icon={ArrowUpCircle} label={updateStatus.phase === 'downloaded' ? 'Install Flowr update' : `Update to Flowr ${updateStatus.latestVersion || ''}`} onPress={onUpdate} solid theme={theme} />
+        <View style={{ position: 'absolute', right: 2, top: 2, width: 7, height: 7, borderRadius: 4, backgroundColor: theme.success, borderWidth: 1, borderColor: theme.chrome }} />
+      </View> : null}
       <I icon={MoreHorizontal} label="Menu" onPress={menu} theme={theme} />
     </View>
     {showViewLive && extPanelOpen && !ddCooldownRef.current && (
@@ -733,8 +737,8 @@ function StoreBanner({ onGet, busy, theme }) {
         <Text style={[s.rs, { color: theme.muted }]} numberOfLines={1}>Flowr downloads and unpacks it for you — nothing to do manually.</Text>
       </View>
       <TouchableOpacity style={[s.getBtn, { backgroundColor: theme.accent, opacity: busy ? 0.6 : 1 }]} disabled={busy} onPress={onGet}>
-        {busy ? <RotateCcw size={15} color="#fff" /> : <Download size={15} color="#fff" />}
-        <Text style={s.getText}>{busy ? 'Adding…' : 'Get'}</Text>
+        {busy ? <RotateCcw size={15} color={theme.onAccent} /> : <Download size={15} color={theme.onAccent} />}
+        <Text style={[s.getText, { color: theme.onAccent }]}>{busy ? 'Adding…' : 'Get'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -836,7 +840,40 @@ function PasswordRow({ p, onReveal, onCopy, onDelete, theme }) {
   );
 }
 
-function SettingsPage({ settings, profiles, active, update, createProfile, switchProfile, openPage, go, clearData, setDefault, chooseDownloads, reset, account, onSignIn, onSignOut, passwords, onRevealPw, onCopyPw, onDeletePw, pwEncAvail, theme, biometricAvailable, changeVaultPin }) {
+function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onDone, theme }) {
+  const features = [
+    { icon: ShieldCheck, title: 'Private by design', text: 'Encrypted history, tracker protection, redirect controls, and Vault-backed browser locks.' },
+    { icon: Sparkles, title: 'Mavis beside every page', text: 'Open your private Tieddr assistant without leaving the site you are working in.' },
+    { icon: Gauge, title: 'Made for lighter devices', text: 'Memory Saver releases inactive tabs and keeps renderer usage under control.' },
+    { icon: KeyRound, title: 'Vault-powered autofill', text: 'Passwords imported into Tieddr Vault can securely fill forms across Flowr.' }
+  ];
+  return <ScrollView style={{ flex: 1, backgroundColor: theme.bg }} contentContainerStyle={{ padding: 38, alignItems: 'center', minHeight: '100%' }}>
+    <View dataSet={{ welcome: '1' }} style={{ width: '100%', maxWidth: 1080, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: theme.border, background: `radial-gradient(circle at 12% 0%, ${theme.accentSoft}, transparent 34%), linear-gradient(145deg, ${theme.panel}, ${theme.bg})`, boxShadow: '0 30px 90px rgba(0,0,0,.28)' }}>
+      <View style={{ padding: 42, borderBottomWidth: 1, borderBottomColor: theme.border, position: 'relative' }}>
+        <View dataSet={{ welcomeorb: '1' }} style={{ position: 'absolute', width: 220, height: 220, borderRadius: 110, right: -55, top: -78, backgroundColor: theme.accentSoft, opacity: .8 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 }}><Brand size={42} radius={13} /><Text style={{ color: theme.text, fontSize: 17, fontWeight: '800', letterSpacing: .3 }}>FLOWR {APP_VERSION}</Text></View>
+        <Text style={{ color: theme.text, fontSize: 42, lineHeight: 48, fontWeight: '800', letterSpacing: -1.4, maxWidth: 700 }}>{firstRun ? 'Welcome to a calmer web.' : `Flowr ${APP_VERSION} is ready.`}</Text>
+        <Text style={{ color: theme.muted, fontSize: 16, lineHeight: 25, maxWidth: 660, marginTop: 14 }}>{firstRun ? 'Bring your bookmarks and passwords, connect your Tieddr Account, and make Flowr yours.' : 'See the newest privacy, performance, browsing, and Tieddr integration improvements.'}</Text>
+      </View>
+      <View style={{ padding: 34 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+          {features.map(({ icon: Icon, title, text }) => <View key={title} style={{ width: 'calc(50% - 7px)', minWidth: 280, padding: 20, borderRadius: 18, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.border }} {...GLASS_MEDIUM}>
+            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}><Icon size={19} color={theme.accent} /></View>
+            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{title}</Text><Text style={{ color: theme.muted, fontSize: 13, lineHeight: 20, marginTop: 6 }}>{text}</Text>
+          </View>)}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
+          <TouchableOpacity onPress={onImport} style={[s.primary, { backgroundColor: theme.accent }]}><Upload size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Import browser data</Text></TouchableOpacity>
+          {!account ? <TouchableOpacity onPress={onSignIn} style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]}><LogIn size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Sign in to Tieddr Account</Text></TouchableOpacity> : <View style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]}><UserCheck size={16} color={theme.success} /><Text style={[s.actionText, { color: theme.text }]}>{account.name || account.email} connected</Text></View>}
+          <TouchableOpacity onPress={onDone} style={[s.action, { marginLeft: 'auto', backgroundColor: theme.panel, borderColor: theme.border }]}><CheckCircle size={16} color={theme.success} /><Text style={[s.actionText, { color: theme.text }]}>Start browsing</Text></TouchableOpacity>
+        </View>
+        {!vaultUnlocked ? <Text style={{ color: theme.faint, fontSize: 11.5, marginTop: 12 }}>Unlock Tieddr Vault before importing a password CSV. Bookmark HTML or JSON can be imported immediately.</Text> : null}
+      </View>
+    </View>
+  </ScrollView>;
+}
+
+function SettingsPage({ settings, profiles, active, update, createProfile, switchProfile, openPage, go, clearData, setDefault, chooseDownloads, reset, account, onSignIn, onSignOut, onImport, passwords, onRevealPw, onCopyPw, onDeletePw, pwEncAvail, theme, biometricAvailable, changeVaultPin }) {
   const [section, setSection] = useState('account');
   const [name, setName] = useState('');
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -865,7 +902,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
                 </View>
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity style={[s.primary, { backgroundColor: theme.accent, flex: 1 }]} onPress={() => openPage('vault')}><Shield size={16} color="#fff" /><Text style={s.primaryText}>Open Vault</Text></TouchableOpacity>
+                <TouchableOpacity style={[s.primary, { backgroundColor: theme.accent, flex: 1 }]} onPress={() => ipc?.invoke('open-external', 'https://account.tieddr.com')}><User size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Open Tieddr Account</Text></TouchableOpacity>
                 <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border, flex: 1 }]} onPress={onSignOut}><LogOut size={16} color={theme.danger} /><Text style={[s.actionText, { color: theme.danger }]}>Sign out</Text></TouchableOpacity>
               </View>
             </Card>
@@ -878,9 +915,13 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
                   <Text style={[s.rs, { color: theme.muted, lineHeight: 19 }]}>Sign in to sync bookmarks, passwords, notes, and settings with Tieddr Space and Tieddr Vault — across every Tieddr app.</Text>
                 </View>
               </View>
-              <TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={onSignIn}><LogIn size={16} color="#fff" /><Text style={s.primaryText}>Sign in to Tieddr</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={onSignIn}><LogIn size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Sign in to Tieddr</Text></TouchableOpacity>
             </Card>
           )}
+          <Card title="Import browser data" icon={Upload} theme={theme}>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Import bookmark HTML or Chromium bookmark JSON. Export passwords as CSV from Chrome, Edge, Firefox, Brave, or another browser, then unlock Vault before importing.</Text>
+            <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={onImport}><FolderInput size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Choose browser export files</Text></TouchableOpacity>
+          </Card>
           <Card title="Tieddr ecosystem" icon={LayoutGrid} theme={theme}>
             <Text style={[s.rs, { color: theme.muted, marginBottom: 10, lineHeight: 19 }]}>Tieddr is a connected suite of apps. Your Tieddr Account links them all.</Text>
             <View style={{ width: '100%' }}>
@@ -1165,8 +1206,8 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             {updateStatus ? <View style={{ marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: updateStatus.available ? theme.accentSoft : theme.soft, borderWidth: 1, borderColor: updateStatus.available ? theme.accent : theme.border }}>
               <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>{updateStatus.phase === 'error' ? 'Could not check for updates' : updateStatus.phase === 'development' ? 'Packaged builds only' : updateStatus.phase === 'downloading' ? `Downloading Flowr ${updateStatus.latestVersion}…` : updateStatus.phase === 'downloaded' ? 'Update ready to install' : updateStatus.available ? `Flowr ${updateStatus.latestVersion} is ready` : 'You’re up to date'}</Text>
               <Text style={{ color: theme.muted, fontSize: 12.5, marginTop: 4 }}>{updateStatus.phase === 'error' || updateStatus.phase === 'development' ? updateStatus.error : updateStatus.phase === 'downloading' ? `${Math.round(updateStatus.percent || 0)}% downloaded. Keep Flowr open while the update finishes.` : updateStatus.phase === 'downloaded' ? (updateStatus.installOnQuit ? 'Flowr will install the update automatically when you close the browser.' : 'Restart Flowr to finish installing the downloaded update.') : updateStatus.available ? `You have ${updateStatus.currentVersion}. Flowr can download and install the update for you.` : `Flowr ${updateStatus.currentVersion || APP_VERSION} is the latest release.`}</Text>
-              {updateStatus.available && updateStatus.phase === 'available' ? <TouchableOpacity onPress={() => ipc?.invoke('download-update')} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Download and install</Text></TouchableOpacity> : null}
-              {updateStatus.phase === 'downloaded' && !updateStatus.installOnQuit ? <TouchableOpacity onPress={() => ipc?.invoke('install-update')} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '700' }}>Restart and install</Text></TouchableOpacity> : null}
+              {updateStatus.available && updateStatus.phase === 'available' ? <TouchableOpacity onPress={() => ipc?.invoke('download-update')} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: theme.onAccent, fontSize: 12.5, fontWeight: '700' }}>Download and install</Text></TouchableOpacity> : null}
+              {updateStatus.phase === 'downloaded' && !updateStatus.installOnQuit ? <TouchableOpacity onPress={() => ipc?.invoke('install-update')} style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 9, backgroundColor: theme.accent }}><Text style={{ color: theme.onAccent, fontSize: 12.5, fontWeight: '700' }}>Restart and install</Text></TouchableOpacity> : null}
             </View> : null}
           </Card>
           <Card title="Release notes" icon={BookOpen} theme={theme}>
@@ -1187,7 +1228,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
         return (
           <Card title="Extensions" icon={Puzzle} theme={theme}>
             <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Add and manage Chrome-compatible extensions.</Text>
-            <TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={() => openPage('extensions')}><Puzzle size={16} color="#fff" /><Text style={s.primaryText}>Manage extensions</Text></TouchableOpacity>
+            <TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={() => openPage('extensions')}><Puzzle size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Manage extensions</Text></TouchableOpacity>
           </Card>
         );
       case 'about':
@@ -1380,7 +1421,7 @@ function TieddrVaultPage({ state, items, account, onSignIn, onUnlock, onLock, on
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // Tieddr Vault owns its own brand accent (the signature red), regardless of
   // the browser's theme accent — this is the Vault surface, not generic chrome.
-  theme = { ...theme, accent: '#ff453a', accentSoft: 'rgba(255,69,58,0.14)' };
+  theme = { ...theme, accent: '#ff453a', onAccent: '#ffffff', accentSoft: 'rgba(255,69,58,0.14)' };
 
   // Signed out
   if (!state.linked) {
@@ -1823,6 +1864,7 @@ export default function App() {
   const [closingTabs, setClosingTabs] = useState(new Set());
   const [sidePanel, setSidePanel] = useState({ open: false, extId: null });
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
   const urlRef = useRef(null);
   const extActsRef = useRef(extActs); extActsRef.current = extActs;
   const pendingPwRef = useRef(null);
@@ -1843,7 +1885,10 @@ export default function App() {
     ipc.invoke('pw-encryption-available').then(v => setPwEncAvail(!!v));
     ipc.invoke('vault-state').then(v => setVaultState(v || { linked: false, unlocked: false, hasVault: false }));
     ipc.invoke('check-biometric-available').then(v => setBiometricAvailable(!!v));
+    ipc.invoke('get-update-status').then(v => setUpdateStatus(v || null));
+    const offUpdate = ipc.on('update-status', status => setUpdateStatus(status || null));
     refreshExtActs();
+    return () => { if (typeof offUpdate === 'function') offUpdate(); };
   }, [refreshExtActs]);
 
   const changeVaultPin = useCallback(async () => {
@@ -1914,10 +1959,16 @@ export default function App() {
     setBookmarks(b || []); setHistory(h || []); setDownloads(d || []);
     setProfiles(p || []); setActiveProfile(a || 'default'); setExtensions(e || []); setFolders(f || []);
     setNotes(n || []); setNoteFolders(nf || []);
+    if (r?.onboardingCompleted !== true || r?.lastSeenVersion !== APP_VERSION) {
+      const id = nextId();
+      setTabs(current => current.some(item => item.kind === 'welcome') ? current : current.concat({ id, kind: 'welcome', title: r?.onboardingCompleted === true ? `What's new` : 'Welcome', url: 'flow://welcome' }));
+      setActiveId(current => current === 1 ? id : current);
+    }
     if (r?.autoUpdate !== false) ipc.invoke('check-for-updates', {
       promptOnAvailable: r?.backgroundUpdateDownload !== true,
       backgroundDownload: r?.backgroundUpdateDownload === true
     }).then(result => {
+      setUpdateStatus(result || null);
       if (result?.available) console.info(`[Flowr] Update ${result.latestVersion} is available`);
     }).catch(() => {});
     // Trigger a background Tieddr Space sync on load — if the user is
@@ -2370,6 +2421,22 @@ export default function App() {
     title: 'Restore default settings?', message: 'Theme, search engine, privacy, and all preferences return to defaults. Bookmarks and history are kept.',
     actions: [{ label: 'Cancel', action: null }, { label: 'Restore defaults', primary: true, action: { dialog: 'reset' } }]
   });
+  const importBrowserData = async () => {
+    const result = await ipc.invoke('import-browser-data');
+    if (!result || result.canceled) return;
+    if (result.error) {
+      showDialog({ title: result.requiresVault ? 'Unlock Vault to import passwords' : 'Import could not finish', message: result.error });
+      return;
+    }
+    setBookmarks(await ipc.invoke('get-bookmarks') || []);
+    setPasswords(await ipc.invoke('pw-list') || []);
+    await vaultRefresh();
+    showDialog({ title: 'Browser data imported', message: `${result.bookmarks || 0} bookmarks and ${result.passwords || 0} passwords were added.${result.passwords ? ' Imported passwords are now protected by Tieddr Vault.' : ''}` });
+  };
+  const finishWelcome = async id => {
+    setSettings(await ipc.invoke('update-settings', { onboardingCompleted: true, lastSeenVersion: APP_VERSION }));
+    closeTab(id);
+  };
 
   const pageContent = useMemo(() => ({
     bookmarks: <BookmarksPage items={bookmarks} folders={folders} go={go} remove={rmBookmark} move={moveBookmark} createFolder={createBookmarkFolder} theme={theme} account={account} />,
@@ -2381,8 +2448,9 @@ export default function App() {
       remove={async id => { setExtensions(await ipc.invoke('remove-extension', id)); refreshExtActs(); }}
       toggle={async (id, en) => { setExtensions(await ipc.invoke('toggle-extension', id, en)); refreshExtActs(); }}
       theme={theme} />,
-    vault: <TieddrVaultPage state={vaultState} items={vaultItems} account={account} onSignIn={signIn} onUnlock={vaultUnlock} onLock={vaultLock} onAdd={vaultAdd} onDelete={vaultDelete} onReveal={vaultReveal} onCopy={vaultCopy} onSync={vaultSync} theme={theme} />
-  }), [bookmarks, notes, noteFolders, history, downloads, extensions, extActs, folders, installing, theme, go, vaultState, vaultItems, account, settings]);
+    vault: <TieddrVaultPage state={vaultState} items={vaultItems} account={account} onSignIn={signIn} onUnlock={vaultUnlock} onLock={vaultLock} onAdd={vaultAdd} onDelete={vaultDelete} onReveal={vaultReveal} onCopy={vaultCopy} onSync={vaultSync} theme={theme} />,
+    welcome: <WelcomePage firstRun={settings.onboardingCompleted !== true} account={account} vaultUnlocked={vaultState.unlocked} onImport={importBrowserData} onSignIn={signIn} onDone={() => finishWelcome(tabs.find(item => item.kind === 'welcome')?.id)} theme={theme} />
+  }), [bookmarks, notes, noteFolders, history, downloads, extensions, extActs, folders, installing, theme, go, vaultState, vaultItems, account, settings, tabs]);
 
   if (settings.browserLock && !vaultState.unlocked) {
     return <View style={[s.app, { backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', padding: 28 }]}>
@@ -2396,7 +2464,7 @@ export default function App() {
     <View style={[s.app, { backgroundColor: theme.bg }]}>
       <View style={[s.chrome, { backgroundColor: theme.chrome + 'cc', borderBottomColor: theme.border + '60', zIndex: 1001 }]} {...GLASS_HEAVY}>
         <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
-        <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked}
+        <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked} updateStatus={updateStatus} onUpdate={() => updateStatus?.phase === 'downloaded' ? ipc.invoke('install-update') : updateStatus?.phase === 'available' ? ipc.invoke('download-update') : openPage('settings')}
           pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} bookmarks={bookmarks} history={history} theme={theme}
           extPanelOpen={extPanelOpen} setExtPanelOpen={setExtPanelOpen} extActs={extActs} clickExt={clickExt} openPage={openPage} toggleExtension={toggleExtension} pinExt={pinExt} showViewLive={showViewLive} ddCooldownRef={navDdCooldownRef} urlWrapRef={urlWrapRef}
           focused={navFocused} setFocused={setNavFocused} selIdx={navSelIdx} setSelIdx={setNavSelIdx} clickingSuggestion={navClickingSuggestion}
@@ -2455,7 +2523,7 @@ export default function App() {
         {tabs.filter(t => t.kind !== 'web').map(t => (
           <View key={t.id} style={[StyleSheet.absoluteFill, { display: t.id === activeId ? 'flex' : 'none', backgroundColor: theme.bg }]}>
             {t.kind === 'settings'
-              ? <SettingsPage settings={settings} profiles={profiles} active={activeProfile} update={update} createProfile={createProfile} switchProfile={switchProfile} openPage={openPage} go={go} clearData={clearData} setDefault={setDefault} chooseDownloads={chooseDownloads} reset={reset} account={account} onSignIn={signIn} onSignOut={signOut} passwords={passwords} onRevealPw={revealPw} onCopyPw={copyPw} onDeletePw={deletePw} pwEncAvail={pwEncAvail} theme={theme} biometricAvailable={biometricAvailable} changeVaultPin={changeVaultPin} />
+              ? <SettingsPage settings={settings} profiles={profiles} active={activeProfile} update={update} createProfile={createProfile} switchProfile={switchProfile} openPage={openPage} go={go} clearData={clearData} setDefault={setDefault} chooseDownloads={chooseDownloads} reset={reset} account={account} onSignIn={signIn} onSignOut={signOut} onImport={importBrowserData} passwords={passwords} onRevealPw={revealPw} onCopyPw={copyPw} onDeletePw={deletePw} pwEncAvail={pwEncAvail} theme={theme} biometricAvailable={biometricAvailable} changeVaultPin={changeVaultPin} />
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}

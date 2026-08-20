@@ -18,6 +18,7 @@ const { parseExtensionId, installStoreExtension } = require('./crx');
 const { shouldBlockRequest } = require('./adblock');
 const { createUpdateController } = require('./updater');
 const { parseSiteRules, matchesSiteRule, filterHistory } = require('./privacy');
+const { parsePasswordCsv, parseBookmarkHtml, parseChromiumBookmarks } = require('./importer');
 // Tieddr Vault — password manager + Tieddr Wallet, synced to the encrypted mirror.
 const vault = require('./vault');
 const vaultAccount = require('./vault/account');
@@ -33,6 +34,20 @@ const APP_ICON_PATH = path.join(__dirname, '../../build/icons/flowr-transparent.
 const TIEDDR_CLIENT_ID = 'client_ohHEAmTYYKNYVdE6';
 const TIEDDR_REDIRECT_URI = `${TIEDDR_ACCOUNT_BASE}/oauth/flow-browser/callback`;
 const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
+// Product renames must never create a fresh profile. Pin Flowr to one durable
+// directory and recover account state from known legacy directory names.
+const stableUserData = path.join(app.getPath('appData'), 'Flowr');
+const legacyUserData = ['Flow Browser', 'flow-browser'].map(name => path.join(app.getPath('appData'), name));
+if (!fs.existsSync(stableUserData)) fs.mkdirSync(stableUserData, { recursive: true });
+for (const legacyPath of legacyUserData) {
+  const legacyAccount = path.join(legacyPath, 'account.json');
+  const stableAccount = path.join(stableUserData, 'account.json');
+  if (!fs.existsSync(stableAccount) && fs.existsSync(legacyAccount)) {
+    try { fs.copyFileSync(legacyAccount, stableAccount); } catch (_) {}
+  }
+}
+app.setPath('userData', stableUserData);
 
 function base64url(buf) {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -85,7 +100,9 @@ const SETTINGS_DEFAULTS = {
   uiScale: 1,
   language: 'en',
   accentColor: '',
-  startBackground: 'gradient-midnight'
+  startBackground: 'gradient-midnight',
+  onboardingCompleted: false,
+  lastSeenVersion: ''
 };
 const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
 // Existing installations inherited Memory Saver's old no-op/disabled default.
@@ -1141,10 +1158,14 @@ async function refreshTieddrToken(account) {
 }
 
 ipcMain.handle('get-account', async () => {
-  const account = accountStore.get('account');
+  let account = accountStore.get('account');
+  // Refresh on launch when possible, but never erase a durable signed-in
+  // identity merely because the machine is offline or the token service fails.
+  if (account?.refreshToken) account = await refreshTieddrToken(account) || account;
   const refreshed = await refreshTieddrProfile(account);
+  if (refreshed) accountStore.set('account', refreshed);
   if (refreshed !== account) send('account-changed', refreshed);
-  return refreshed;
+  return refreshed || account;
 });
 
 ipcMain.handle('check-for-updates', (_event, options) => updateController.check(options || {}));
@@ -1156,6 +1177,46 @@ ipcMain.handle('open-external', (_event, url) => {
   if (!/^https:\/\//i.test(String(url || ''))) return false;
   void shell.openExternal(url);
   return true;
+});
+
+ipcMain.handle('import-browser-data', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import browser data into Flowr', properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Browser exports', extensions: ['html', 'htm', 'json', 'csv'] },
+      { name: 'All files', extensions: ['*'] }
+    ]
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true, bookmarks: 0, passwords: 0 };
+  let importedBookmarks = 0, importedPasswords = 0;
+  const existing = bookmarksStore.get('bookmarks') || [];
+  const byUrl = new Map(existing.map(item => [item.url, item]));
+  for (const filePath of result.filePaths) {
+    const extension = path.extname(filePath).toLowerCase();
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (extension === '.csv') {
+      if (!vault.isUnlocked()) return { error: 'Unlock Tieddr Vault before importing passwords. Bookmarks already selected were kept.', bookmarks: importedBookmarks, passwords: 0, requiresVault: true };
+      for (const item of parsePasswordCsv(content)) {
+        const saved = await vault.saveLogin({ origin: item.url, url: item.url, username: item.username, password: item.password, title: item.title });
+        if (saved?.ok) importedPasswords++;
+      }
+    } else {
+      let parsed = [];
+      try { parsed = extension === '.json' ? parseChromiumBookmarks(content) : parseBookmarkHtml(content); } catch (_) {}
+      for (const item of parsed) {
+        if (!byUrl.has(item.url)) importedBookmarks++;
+        byUrl.set(item.url, { ...item, source: 'imported', date: new Date().toISOString() });
+      }
+    }
+  }
+  const bookmarks = [...byUrl.values()];
+  bookmarksStore.set('bookmarks', bookmarks);
+  const folders = [...new Set(bookmarks.map(item => item.folder).filter(Boolean))];
+  bookmarksStore.set('folders', folders);
+  send('bookmarks-changed', bookmarks);
+  send('bookmark-folders-changed', folders);
+  if (importedPasswords) void vault.sync().catch(() => {});
+  return { canceled: false, bookmarks: importedBookmarks, passwords: importedPasswords };
 });
 
 ipcMain.handle('should-block-url', (_event, url) => shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled));
@@ -1295,14 +1356,7 @@ async function syncTieddrBookmarks() {
     }
     if (res.status === 401) {
       // Token expired/invalid and refresh failed — sign out
-      accountStore.set('account', null);
-      stopAutoSync();
-      const localOnly = (bookmarksStore.get('bookmarks') || []).filter((b) => b.source !== 'tieddr');
-      bookmarksStore.set('bookmarks', localOnly);
-      clearSyncedNotes();
-      send('account-changed', null);
-      send('bookmarks-changed', localOnly);
-      return { ok: false, reason: 'expired' };
+      return { ok: false, reason: 'reauthentication-required' };
     }
     if (!res.ok) return { ok: false, reason: 'error' };
     const data = await res.json();

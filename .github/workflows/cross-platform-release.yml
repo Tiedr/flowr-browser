@@ -6,7 +6,7 @@ on:
       release_tag:
         description: Existing GitHub release tag to update
         required: true
-        default: v1.1.6
+        default: v1.1.7
 
 permissions:
   contents: write
@@ -37,6 +37,7 @@ jobs:
       - run: npm run test:adblock
       - run: npm run test:updater
       - run: npm run test:privacy
+      - run: npm run test:importer
       - name: Prepare App Store Connect API key
         if: runner.os == 'macOS'
         shell: bash

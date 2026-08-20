@@ -1,6 +1,6 @@
 import React from 'react';
 import { Image } from 'react-native';
-import { Shield, Settings, Bookmark, FileText, History, Download, Puzzle, Globe } from 'lucide-react';
+import { Shield, Settings, Bookmark, FileText, History, Download, Puzzle, Globe, Sparkles } from 'lucide-react';
 import logo from '../../build/icons/flowr-transparent.png';
 import packageInfo from '../../package.json';
 import vaultLogo from '../../vaultmark.png';
@@ -67,14 +67,14 @@ function resolveTheme(themeId, accentId) {
   const preset = ACCENT_PRESETS.find(a => a.id === accentId);
   if (!preset) return base;
   // Derive accentSoft from the accent color (10% opacity overlay).
-  return { ...base, accent: preset.color, accentSoft: preset.color + '1a' };
+  return { ...base, accent: preset.color, accentSoft: preset.color + '1a', onAccent: '#ffffff' };
 }
 
 const THEMES = {
-  flow: { id: 'flow', name: 'Flowr', desc: 'Signature black and white.', bg: '#0f0f0f', chrome: '#171717', glass: '#1a1a1a', strong: '#222222', panel: '#181818', soft: '#141414', text: '#ededed', muted: '#888888', faint: '#555555', border: '#2a2a2a', accent: '#e0e0e0', accentSoft: '#1a1a1a', success: '#34d399', danger: '#f87171' },
-  graphite: { id: 'graphite', name: 'Graphite', desc: 'Quiet, near-black focus.', bg: '#0b0d11', chrome: '#0f1116', glass: '#15181f', strong: '#1a1e26', panel: '#111318', soft: '#0e1015', text: '#e7e9ec', muted: '#878d97', faint: '#565b64', border: '#1e222a', accent: '#5c8cff', accentSoft: '#151b28', success: '#43c98a', danger: '#f06a71' },
-  aurora: { id: 'aurora', name: 'Aurora', desc: 'Clean, quiet light.', bg: '#f6f7f9', chrome: '#fbfbfc', glass: '#ffffff', strong: '#ffffff', panel: '#ffffff', soft: '#f0f1f4', text: '#1b1e24', muted: '#646a74', faint: '#9aa0aa', border: '#e7e9ed', accent: '#3268e6', accentSoft: '#eef2fd', success: '#0e9d62', danger: '#d94a45' },
-  linen: { id: 'linen', name: 'Linen', desc: 'Warm reading light.', bg: '#f4f1ea', chrome: '#f8f6f0', glass: '#fffdf9', strong: '#fffdf9', panel: '#fbf9f3', soft: '#efece4', text: '#232019', muted: '#6c655a', faint: '#a39b8d', border: '#e4dfd4', accent: '#7a5fe0', accentSoft: '#f0ecfb', success: '#0f7a54', danger: '#c04a3f' }
+  flow: { id: 'flow', name: 'Flowr', desc: 'Signature black and white.', bg: '#0f0f0f', chrome: '#171717', glass: '#1a1a1a', strong: '#222222', panel: '#181818', soft: '#141414', text: '#ededed', muted: '#a7a7a7', faint: '#747474', border: '#343434', accent: '#e0e0e0', onAccent: '#111111', accentSoft: '#292929', success: '#34d399', danger: '#f87171' },
+  graphite: { id: 'graphite', name: 'Graphite', desc: 'Quiet, near-black focus.', bg: '#0b0d11', chrome: '#0f1116', glass: '#15181f', strong: '#1a1e26', panel: '#111318', soft: '#0e1015', text: '#f2f4f7', muted: '#a8aeba', faint: '#737985', border: '#2b303a', accent: '#5c8cff', onAccent: '#ffffff', accentSoft: '#18233b', success: '#43c98a', danger: '#f06a71' },
+  aurora: { id: 'aurora', name: 'Aurora', desc: 'Clean, quiet light.', bg: '#f6f7f9', chrome: '#fbfbfc', glass: '#ffffff', strong: '#ffffff', panel: '#ffffff', soft: '#f0f1f4', text: '#1b1e24', muted: '#646a74', faint: '#8a919d', border: '#dce0e7', accent: '#3268e6', onAccent: '#ffffff', accentSoft: '#e7edfc', success: '#0e9d62', danger: '#d94a45' },
+  linen: { id: 'linen', name: 'Linen', desc: 'Warm reading light.', bg: '#f4f1ea', chrome: '#f8f6f0', glass: '#fffdf9', strong: '#fffdf9', panel: '#fbf9f3', soft: '#efece4', text: '#232019', muted: '#6c655a', faint: '#91887a', border: '#ddd6c9', accent: '#7a5fe0', onAccent: '#ffffff', accentSoft: '#ebe5fa', success: '#0f7a54', danger: '#c04a3f' }
 };
 
 const ENGINES = {
@@ -90,7 +90,8 @@ const PAGES = {
   notes: { title: 'Notes', icon: FileText },
   history: { title: 'History', icon: History },
   downloads: { title: 'Downloads', icon: Download },
-  extensions: { title: 'Extensions', icon: Puzzle }
+  extensions: { title: 'Extensions', icon: Puzzle },
+  welcome: { title: `What's new`, icon: Sparkles }
 };
 
 function urlOf(v, s) {
