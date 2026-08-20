@@ -374,7 +374,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
   );
 }
 
-function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, menu, bookmark, bookmarked, pinnedExts, onExt, onExtPanel, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
+function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, menu, bookmark, bookmarked, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
   const themeRef = useRef(theme); themeRef.current = theme;
   const prevSugsRef = useRef('');
   const ddOpenRef = useRef(false);
@@ -467,6 +467,7 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, home, men
           {a.iconUrl ? <Image source={{ uri: a.iconUrl }} style={s.extIcon} /> : <Puzzle size={16} color={theme.muted} />}
         </TouchableOpacity>
       ))}
+      <I icon={Sparkles} label="Open Mavis sidebar" onPress={onMavis} theme={theme} />
       <View style={{ position: 'relative' }}>
         <I icon={Puzzle} label="Extensions" onPress={onExtPanel} theme={theme} />
         {!showViewLive && showInlineExtPanel && (
@@ -670,7 +671,11 @@ function historyGroups(items) {
   return groups;
 }
 
-function HistoryPage({ items, go, clear, theme }) {
+function HistoryPage({ items, go, clear, theme, locked, onUnlock }) {
+  if (locked) return <>
+    <Head title="History locked" detail="Unlock Tieddr Vault to view this profile's encrypted history." theme={theme} />
+    <View style={{ marginTop: 18 }}><Action icon={Lock} text="Open Vault" onPress={onUnlock} theme={theme} /></View>
+  </>;
   const groups = historyGroups(items);
   return (
     <>
@@ -910,6 +915,16 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             <Toggle label="Fingerprint spoofing" detail="Reduce browser fingerprinting by reporting generic hardware info." value={!!settings.fingerprintProtection} onPress={() => update({ fingerprintProtection: !settings.fingerprintProtection })} theme={theme} />
             <Toggle label="Referrer policy" detail="Send a reduced referrer header to sites." value={!!settings.reducedReferrer} onPress={() => update({ reducedReferrer: !settings.reducedReferrer })} theme={theme} />
           </Card>
+          <Card title="Private history" icon={History} theme={theme}>
+            <Toggle label="Encrypt history on this device" detail="Protect the local history database with the operating system keychain." value={settings.privateHistory !== false} onPress={() => update({ privateHistory: settings.privateHistory === false })} theme={theme} />
+            <Toggle label="Require Vault to view history" detail="History stays hidden until your Tieddr Vault is unlocked." value={!!settings.historyLock} onPress={() => update({ historyLock: !settings.historyLock })} theme={theme} />
+            <Toggle label="Lock the entire browser with Vault" detail="Show a Vault unlock screen before tabs and browser data can be used." value={!!settings.browserLock} onPress={() => update({ browserLock: !settings.browserLock })} theme={theme} />
+            <Toggle label="Clear private data when Flowr closes" detail="Remove local history, cookies, caches, and site storage on exit." value={!!settings.clearPrivateDataOnExit} onPress={() => update({ clearPrivateDataOnExit: !settings.clearPrivateDataOnExit })} theme={theme} />
+            <Pick label="Automatically clear history" values={['session', '1h', '1d', '7d', '30d', 'forever']} value={settings.historyRetention || 'forever'} format={v => ({ session: 'Never save history', '1h': 'After 1 hour', '1d': 'After 1 day', '7d': 'After 7 days', '30d': 'After 30 days', forever: 'Keep until I clear it' })[v]} onPick={v => update({ historyRetention: v })} theme={theme} />
+            <Text style={[s.label, { color: theme.text, marginTop: 12 }]}>Never retain these sites</Text>
+            <TextInput multiline style={[s.inlineInput, { color: theme.text, minHeight: 74, borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, textAlignVertical: 'top' }]} placeholder={'example.com\n*.work.example'} placeholderTextColor={theme.faint} value={settings.autoClearSites || ''} onChangeText={value => update({ autoClearSites: value })} />
+            <Text style={[s.rs, { color: theme.faint, marginTop: 8, lineHeight: 17 }]}>This protects history stored by Flowr. Your internet provider may still see destination metadata unless you use a trusted VPN or Tor.</Text>
+          </Card>
           <Card title="Vault Security" icon={Lock} theme={theme}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 10, borderWidth: 1, backgroundColor: theme.accentSoft + '20', borderColor: theme.border, marginBottom: 12 }}>
               <Shield size={20} color={theme.accent} />
@@ -949,6 +964,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
       case 'performance':
         return (<>
           <Card title="Performance" icon={Gauge} theme={theme}>
+            <Toggle label="Low-end device mode" detail="Use three page renderers, discard inactive tabs after five minutes, reduce motion, and disable page preloading. Restart Flowr after enabling." value={!!settings.lowEndMode} onPress={() => update(settings.lowEndMode ? { lowEndMode: false } : { lowEndMode: true, memorySaver: true, inactiveTabTimeout: 5, renderProcessLimit: 3, reduceMotion: true, preloadPages: false, glassToolbar: false, glassCards: false, glassSidebar: false })} theme={theme} />
             <Toggle label="Memory saver" detail="Unload long-idle tabs and restore them when selected." value={settings.memorySaver !== false} onPress={() => update({ memorySaver: settings.memorySaver === false })} theme={theme} />
             <Slider label="Unload inactive tabs" detail="How long a background tab stays resident before Flowr releases its memory." value={settings.inactiveTabTimeout || 10} min={5} max={60} step={5} onChange={v => update({ inactiveTabTimeout: v })} format={v => `${v} min`} theme={theme} />
             <Toggle label="Use hardware acceleration" detail="Use the GPU for smoother graphics (restart to apply)." value={settings.hardwareAcceleration !== false} onPress={() => update({ hardwareAcceleration: settings.hardwareAcceleration === false })} theme={theme} />
@@ -957,7 +973,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
           <Card title="Rendering" icon={Monitor} theme={theme}>
             <Toggle label="Smooth scrolling" detail="Enable smooth kinetic scrolling." value={settings.smoothScroll !== false} onPress={() => update({ smoothScroll: settings.smoothScroll === false })} theme={theme} />
             <Toggle label="Accelerated 2D canvas" detail="Hardware-accelerate canvas drawing for faster rendering." value={!!settings.acceleratedCanvas} onPress={() => update({ acceleratedCanvas: !settings.acceleratedCanvas })} theme={theme} />
-            <Slider label="Render process limit" detail="Maximum page renderer pool. Restart Flowr after changing this." value={settings.renderProcessLimit || 4} min={2} max={8} step={1} onChange={v => update({ renderProcessLimit: v })} format={v => `${v} processes`} theme={theme} />
+            <Slider label="Render process limit" detail="Maximum page renderer pool. Restart Flowr after changing this." value={settings.renderProcessLimit || 3} min={2} max={8} step={1} onChange={v => update({ renderProcessLimit: v })} format={v => `${v} processes`} theme={theme} />
           </Card>
           <Card title="Network" icon={Wifi} theme={theme}>
             <Pick label="DNS over HTTPS" values={['off', 'opportunistic', 'strict']} value={settings.dnsOverHttps || 'off'} format={v => ({ off: 'Off', opportunistic: 'Opportunistic', strict: 'Strict' })[v]} onPick={v => update({ dnsOverHttps: v })} theme={theme} />
@@ -1667,9 +1683,6 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
       if (!validatedURL || validatedURL === 'about:blank' || errorCode === -3 || errorCode === -2) return;
       h().navError(tab.id, validatedURL, errorDescription);
     };
-    const onCtx = (e, params) => {
-      h().contextMenu({ ...contextParams(params), x: params.x + host.getBoundingClientRect().left, y: params.y + host.getBoundingClientRect().top });
-    };
     const onNewWin = async (e, url) => {
       e.preventDefault();
       if (!url) return;
@@ -1693,7 +1706,6 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
     wv.addEventListener('did-stop-loading', onStopLoad);
     wv.addEventListener('found-in-page', onFound);
     wv.addEventListener('did-fail-load', onFail);
-    wv.addEventListener('context-menu', onCtx);
     wv.addEventListener('new-window', onNewWin);
     wv.addEventListener('dom-ready', onDomReady);
 
@@ -1708,7 +1720,6 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
       wv.removeEventListener('did-stop-loading', onStopLoad);
       wv.removeEventListener('found-in-page', onFound);
       wv.removeEventListener('did-fail-load', onFail);
-      wv.removeEventListener('context-menu', onCtx);
       wv.removeEventListener('new-window', onNewWin);
       wv.removeEventListener('dom-ready', onDomReady);
       try { webviewsRef.current.delete(tab.id); } catch (_) {}
@@ -1744,7 +1755,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
   return <div ref={hostRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
 });
 
-function SidePanelHost({ info, preloadUrl, contentRef }) {
+function SidePanelHost({ info, preloadUrl, contentRef, onClose, theme }) {
   const ref = useRef(null);
   useEffect(() => {
     const host = ref.current;
@@ -1754,12 +1765,17 @@ function SidePanelHost({ info, preloadUrl, contentRef }) {
     wv.setAttribute('preload', preloadUrl);
     wv.setAttribute('partition', info.incognito ? 'flow-incognito' : 'persist:flow-main');
     wv.setAttribute('webpreferences', 'contextIsolation=yes sandbox=no');
-    wv.style.position = 'absolute'; wv.style.top = '0'; wv.style.left = '0'; wv.style.right = '0'; wv.style.bottom = '0';
-    wv.style.width = '100%'; wv.style.height = '100%'; wv.style.border = 'none'; wv.style.background = '#ffffff';
+    wv.style.position = 'absolute'; wv.style.top = '42px'; wv.style.left = '0'; wv.style.right = '0'; wv.style.bottom = '0';
+    wv.style.width = '100%'; wv.style.height = 'calc(100% - 42px)'; wv.style.border = 'none'; wv.style.background = '#ffffff';
     host.appendChild(wv);
     return () => { if (wv.parentNode) wv.parentNode.removeChild(wv); };
   }, [info.extId, info.url, preloadUrl, info.incognito]);
-  return <View ref={ref} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: info.width || 400, zIndex: 6, borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.12)' }} />;
+  return <View ref={ref} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: info.width || 400, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme?.border || 'rgba(255,255,255,0.12)', backgroundColor: theme?.panel || '#111' }}>
+    <View style={{ height: 42, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: theme?.border || 'rgba(255,255,255,0.12)' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Sparkles size={16} color={theme?.accent} /><Text style={{ color: theme?.text, fontWeight: '700' }}>{info.mavis ? 'Mavis' : 'Side panel'}</Text></View>
+      <I icon={X} label="Close sidebar" onPress={onClose} theme={theme} />
+    </View>
+  </View>;
 }
 
 // Dropdown position helpers (used by App's full-screen dropdown layer)
@@ -2245,6 +2261,7 @@ export default function App() {
     listen('note-folders-changed', x => setNoteFolders(x || []));
     listen('profile-changed', load);
     listen('show-context-menu', p => openContext(p));
+    listen('open-url-in-new-tab', url => { if (url) openWebTab(url); });
     listen('account-changed', a => { setAccount(a || null); setTimeout(load, 150); ipc.invoke('vault-state').then(v => setVaultState(v || { linked: false, unlocked: false, hasVault: false })); });
     listen('vault-locked', () => { setVaultState(v => ({ ...v, unlocked: false })); setVaultItems([]); });
     listen('side-panel-opened', info => setSidePanel({ open: true, extId: info?.extId || null, url: info?.url || null, width: info?.width || 400, incognito: !!info?.incognito }));
@@ -2314,7 +2331,7 @@ export default function App() {
   const vaultRefresh = useCallback(async () => { const r = await ipc.invoke('vault-list'); if (r && r.ok) setVaultItems(r.items || []); }, []);
   const vaultUnlock = async (pin) => {
     const r = await ipc.invoke('vault-unlock', pin);
-    if (r && r.ok) { setVaultState(v => ({ ...v, unlocked: true, hasVault: true })); await vaultRefresh(); }
+    if (r && r.ok) { setVaultState(v => ({ ...v, unlocked: true, hasVault: true })); await vaultRefresh(); setHistory(await ipc.invoke('get-history') || []); }
     return r;
   };
   const vaultLock = async () => { await ipc.invoke('vault-lock'); setVaultState(v => ({ ...v, unlocked: false })); setVaultItems([]); };
@@ -2354,7 +2371,7 @@ export default function App() {
   const pageContent = useMemo(() => ({
     bookmarks: <BookmarksPage items={bookmarks} folders={folders} go={go} remove={rmBookmark} move={moveBookmark} createFolder={createBookmarkFolder} theme={theme} account={account} />,
     notes: <NotesPage items={notes} folders={noteFolders} theme={theme} />,
-    history: <HistoryPage items={history} go={go} clear={clearHistory} theme={theme} />,
+    history: <HistoryPage items={history} go={go} clear={clearHistory} theme={theme} locked={!!settings.historyLock && !vaultState.unlocked} onUnlock={() => openPage('vault')} />,
     downloads: <DownloadsPage items={downloads} clear={clearDownloads} theme={theme} />,
     extensions: <ExtensionsPage items={extensions} acts={extActs} install={install} installStore={installStore} busy={installing} onPin={pinExt}
       onSidePanel={act => setSidePanel({ open: true, extId: act.id, url: act.sidePanel, width: 400, incognito })}
@@ -2364,12 +2381,20 @@ export default function App() {
     vault: <TieddrVaultPage state={vaultState} items={vaultItems} account={account} onSignIn={signIn} onUnlock={vaultUnlock} onLock={vaultLock} onAdd={vaultAdd} onDelete={vaultDelete} onReveal={vaultReveal} onCopy={vaultCopy} onSync={vaultSync} theme={theme} />
   }), [bookmarks, notes, noteFolders, history, downloads, extensions, extActs, folders, installing, theme, go, vaultState, vaultItems, account, settings]);
 
+  if (settings.browserLock && !vaultState.unlocked) {
+    return <View style={[s.app, { backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', padding: 28 }]}>
+      <View style={{ width: '100%', maxWidth: 560, maxHeight: '90vh' }}>
+        <TieddrVaultPage state={vaultState} items={[]} account={account} onSignIn={signIn} onUnlock={vaultUnlock} onLock={vaultLock} onAdd={vaultAdd} onDelete={vaultDelete} onReveal={vaultReveal} onCopy={vaultCopy} onSync={vaultSync} theme={theme} />
+      </View>
+    </View>;
+  }
+
   return (
     <View style={[s.app, { backgroundColor: theme.bg }]}>
       <View style={[s.chrome, { backgroundColor: theme.chrome + 'cc', borderBottomColor: theme.border + '60', zIndex: 1001 }]} {...GLASS_HEAVY}>
         <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
         <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked}
-          pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} bookmarks={bookmarks} history={history} theme={theme}
+          pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} bookmarks={bookmarks} history={history} theme={theme}
           extPanelOpen={extPanelOpen} setExtPanelOpen={setExtPanelOpen} extActs={extActs} clickExt={clickExt} openPage={openPage} toggleExtension={toggleExtension} pinExt={pinExt} showViewLive={showViewLive} ddCooldownRef={navDdCooldownRef} urlWrapRef={urlWrapRef}
           focused={navFocused} setFocused={setNavFocused} selIdx={navSelIdx} setSelIdx={setNavSelIdx} clickingSuggestion={navClickingSuggestion}
           input={navInput} setInput={setNavInput} />
@@ -2431,7 +2456,7 @@ export default function App() {
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}
-        {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} /> : null}
+        {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : null}
         {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
       </View>
     </View>

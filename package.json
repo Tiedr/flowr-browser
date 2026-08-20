@@ -1,6 +1,6 @@
 {
   "name": "flow-browser",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "A minimal, fast, and secure web browser built with React Native and Electron.",
   "author": "Flowr Browser Team",
   "main": "src/main/main.js",
@@ -11,6 +11,7 @@
     "build": "webpack --config webpack.renderer.config.js --mode production",
     "test:adblock": "node tests/adblock.test.js",
     "test:updater": "node tests/updater.test.js",
+    "test:privacy": "node tests/privacy.test.js",
     "dist": "npm run build && electron-builder",
     "dist:win:update": "npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage --x64 --publish never",

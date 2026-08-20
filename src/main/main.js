@@ -17,6 +17,7 @@ const Store = require('./store');
 const { parseExtensionId, installStoreExtension } = require('./crx');
 const { shouldBlockRequest } = require('./adblock');
 const { createUpdateController } = require('./updater');
+const { parseSiteRules, matchesSiteRule, filterHistory } = require('./privacy');
 // Tieddr Vault — password manager + Tieddr Wallet, synced to the encrypted mirror.
 const vault = require('./vault');
 const vaultAccount = require('./vault/account');
@@ -67,8 +68,15 @@ const SETTINGS_DEFAULTS = {
   savePasswords: true,
   autofill: true,
   memorySaver: true,
-  inactiveTabTimeout: 10,
-  renderProcessLimit: 4,
+  inactiveTabTimeout: 5,
+  renderProcessLimit: 3,
+  lowEndMode: false,
+  privateHistory: true,
+  historyLock: false,
+  browserLock: false,
+  historyRetention: 'forever',
+  autoClearSites: '',
+  clearPrivateDataOnExit: false,
   hardwareAcceleration: true,
   aiSuggestions: true,
   reduceMotion: false,
@@ -81,11 +89,11 @@ const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
 // Existing installations inherited Memory Saver's old no-op/disabled default.
 // Apply the efficient profile once, while leaving subsequent user choices
 // untouched across upgrades.
-if (settingsStore.get('performanceProfileVersion') !== 1) {
+if (settingsStore.get('performanceProfileVersion') !== 2) {
   settingsStore.set('memorySaver', true);
-  settingsStore.set('inactiveTabTimeout', 10);
-  settingsStore.set('renderProcessLimit', 4);
-  settingsStore.set('performanceProfileVersion', 1);
+  settingsStore.set('inactiveTabTimeout', 5);
+  settingsStore.set('renderProcessLimit', 3);
+  settingsStore.set('performanceProfileVersion', 2);
 }
 if (settingsStore.get('hardwareAcceleration') === false) app.disableHardwareAcceleration();
 
@@ -97,6 +105,10 @@ const rendererProcessLimit = Number.isFinite(configuredRendererLimit)
   ? Math.min(8, Math.max(2, Math.round(configuredRendererLimit)))
   : SETTINGS_DEFAULTS.renderProcessLimit;
 app.commandLine.appendSwitch('renderer-process-limit', String(rendererProcessLimit));
+if ((settingsStore.get('dnsOverHttps') || 'off') !== 'off') {
+  app.commandLine.appendSwitch('dns-over-https-mode', settingsStore.get('dnsOverHttps') === 'strict' ? 'secure' : 'automatic');
+  app.commandLine.appendSwitch('dns-over-https-templates', 'https://cloudflare-dns.com/dns-query{?dns}');
+}
 const downloadsStore = new Store('downloads', { downloads: [] });
 const extensionsStore = new Store('extensions', { extensions: [] });
 const accountStore = new Store('account', { account: null });
@@ -169,34 +181,57 @@ function configureSession(ses) {
     details.requestHeaders['sec-ch-ua'] = `"Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}", "Not_A Brand";v="99"`;
     details.requestHeaders['sec-ch-ua-platform'] = platform.hint;
     details.requestHeaders['sec-ch-ua-mobile'] = '?0';
+    if (settingsStore.get('doNotTrack')) details.requestHeaders.DNT = '1';
+    if (settingsStore.get('reducedReferrer')) {
+      delete details.requestHeaders.Referer;
+      delete details.requestHeaders.referer;
+    }
     callback({ requestHeaders: details.requestHeaders });
   });
   // Match all web requests against the compact, testable Flowr filter engine.
   // It blocks known advertising hosts plus third-party tracking endpoints while
   // leaving first-party pages and navigation untouched.
   ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    if (settingsStore.get('httpsOnly') && details.url.startsWith('http://')) {
+      try {
+        const parsed = new URL(details.url);
+        if (!['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) {
+          parsed.protocol = 'https:';
+          callback({ redirectURL: parsed.href });
+          return;
+        }
+      } catch (_) {}
+    }
     callback({ cancel: shouldBlockRequest(details, adBlockerEnabled) });
   });
 
   // Grant common extension permissions — these are safe, non-privileged APIs
   // that Chrome extensions routinely need. Side panel and contextMenus are
   // included so extensions like ad blockers work correctly.
-  const GRANTED_PERMISSIONS = new Set([
-    'notifications', 'storage', 'tabs', 'contextMenus', 'cookies',
+  const SAFE_PERMISSIONS = new Set([
+    'storage', 'tabs', 'contextMenus', 'cookies',
     'webNavigation', 'webRequest', 'management', 'alarms',
-    'idle', 'clipboardRead', 'clipboardWrite', 'geolocation', 'media',
-    'fullscreen', 'pointerLock', 'midi', 'midiSysex', 'display-capture',
+    'idle', 'clipboardWrite', 'fullscreen', 'pointerLock',
     'bookmarks', 'history', 'downloads', 'topSites',
     'browsingData', 'privacy', 'sessions', 'favicon',
     'search', 'identity', 'power', 'systemPreferences',
     'sidePanel', 'activeTab', 'scripting', 'declarativeNetRequest',
     'declarativeNetRequestFeedback', 'declarativeNetRequestWithHostAccess'
   ]);
+  const SENSITIVE_PERMISSIONS = new Set(['notifications', 'geolocation', 'media', 'midi', 'midiSysex', 'display-capture', 'clipboardRead']);
   ses.setPermissionRequestHandler((wc, permission, callback) => {
-    // Auto-grant safe permissions; prompt-style approve for known ones
-    callback(GRANTED_PERMISSIONS.has(permission));
+    if (SAFE_PERMISSIONS.has(permission)) return callback(true);
+    if (!SENSITIVE_PERMISSIONS.has(permission) || !mainWindow || mainWindow.isDestroyed()) return callback(false);
+    let origin = 'This site';
+    try { origin = new URL(wc.getURL()).hostname || origin; } catch (_) {}
+    void dialog.showMessageBox(mainWindow, {
+      type: 'question', title: 'Site permission',
+      message: `${origin} wants permission to use ${permission.replace(/-/g, ' ')}.`,
+      detail: 'Flowr blocks sensitive permissions unless you explicitly allow them.',
+      buttons: ['Block', 'Allow once'], defaultId: 0, cancelId: 0, noLink: true
+    }).then(result => callback(result.response === 1)).catch(() => callback(false));
   });
-  ses.setPermissionCheckHandler((_wc, permission) => GRANTED_PERMISSIONS.has(permission));
+  ses.setPermissionCheckHandler((_wc, permission) => SAFE_PERMISSIONS.has(permission));
 }
 
 function send(channel, ...args) {
@@ -390,13 +425,83 @@ function persistDownload(update) {
   return next;
 }
 
+function historyRules() {
+  return parseSiteRules(settingsStore.get('autoClearSites'));
+}
+
+function matchesHistoryRule(url) {
+  return matchesSiteRule(url, historyRules());
+}
+
+function decryptHistory() {
+  const encrypted = historyStore.get('encryptedHistory');
+  if (encrypted && safeStorage?.isEncryptionAvailable()) {
+    try { return JSON.parse(safeStorage.decryptString(Buffer.from(encrypted, 'base64'))); } catch (_) {}
+  }
+  return historyStore.get('history') || [];
+}
+
+function readHistory() {
+  const all = decryptHistory();
+  const filtered = filterHistory(all, { rules: historyRules(), retention: settingsStore.get('historyRetention') || 'forever' });
+  if (filtered.length !== all.length) writeHistory(filtered);
+  return filtered;
+}
+
+function writeHistory(items) {
+  if (settingsStore.get('privateHistory') !== false && safeStorage?.isEncryptionAvailable()) {
+    try {
+      historyStore.set('encryptedHistory', safeStorage.encryptString(JSON.stringify(items)).toString('base64'));
+      historyStore.set('history', []);
+      return;
+    } catch (_) {}
+  }
+  historyStore.set('history', items);
+  historyStore.set('encryptedHistory', '');
+}
+
 function addToHistory(url, title) {
-  if (INCOGNITO || !url || url === 'about:blank') return;
-  const history = historyStore.get('history') || [];
+  if (INCOGNITO || !url || url === 'about:blank' || matchesHistoryRule(url)) return;
+  if (settingsStore.get('historyRetention') === 'session') return;
+  const history = readHistory();
   const newItem = { url, title: title || url, date: new Date().toISOString() };
   const next = [newItem, ...history.filter((item) => item.url !== url)].slice(0, 1000);
-  historyStore.set('history', next);
-  send('history-changed', next);
+  writeHistory(next);
+  send('history-changed', settingsStore.get('historyLock') && !vault.isUnlocked() ? [] : next);
+}
+
+function showSiteContextMenu(wc, params) {
+  const template = [];
+  if (params.isEditable) {
+    template.push(
+      { label: 'Undo', enabled: !!params.editFlags?.canUndo, click: () => wc.undo() }, { label: 'Redo', enabled: !!params.editFlags?.canRedo, click: () => wc.redo() }, { type: 'separator' },
+      { label: 'Cut', enabled: !!params.editFlags?.canCut, click: () => wc.cut() }, { label: 'Copy', enabled: !!params.editFlags?.canCopy, click: () => wc.copy() },
+      { label: 'Paste', enabled: !!params.editFlags?.canPaste, click: () => wc.paste() }, { label: 'Select all', click: () => wc.selectAll() }
+    );
+  } else {
+    if (params.linkURL) template.push(
+      { label: 'Open link in new tab', click: () => send('open-url-in-new-tab', params.linkURL) },
+      { label: 'Copy link address', click: () => clipboard.writeText(params.linkURL) }, { type: 'separator' }
+    );
+    if (params.mediaType === 'image' && params.srcURL) template.push(
+      { label: 'Open image in new tab', click: () => send('open-url-in-new-tab', params.srcURL) },
+      { label: 'Save image as…', click: () => wc.downloadURL(params.srcURL) }, { type: 'separator' }
+    );
+    if (params.selectionText) template.push(
+      { label: 'Copy', click: () => wc.copy() },
+      { label: `Search for “${params.selectionText.slice(0, 36)}”`, click: () => send('open-url-in-new-tab', searchUrl(params.selectionText)) },
+      { type: 'separator' }
+    );
+    template.push(
+      { label: 'Back', enabled: wc.canGoBack(), click: () => wc.goBack() },
+      { label: 'Forward', enabled: wc.canGoForward(), click: () => wc.goForward() },
+      { label: 'Reload', click: () => wc.reload() }, { type: 'separator' },
+      { label: 'Save page as…', click: () => wc.savePage(path.join(app.getPath('downloads'), 'page.html'), 'HTMLComplete').catch(() => {}) },
+      { label: 'Print…', click: () => wc.print() }
+    );
+    if (settingsStore.get('devTools') !== false) template.push({ type: 'separator' }, { label: 'Inspect', click: () => wc.inspectElement(params.x, params.y) });
+  }
+  Menu.buildFromTemplate(template).popup({ window: mainWindow });
 }
 
 async function loadStoredExtensions() {
@@ -604,6 +709,10 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   if (memoryPressureInterval) clearInterval(memoryPressureInterval);
+  if (settingsStore.get('clearPrivateDataOnExit')) {
+    writeHistory([]);
+    try { void (browsingSession || session.defaultSession).clearStorageData({ storages: ['cookies', 'localstorage', 'caches', 'indexdb', 'serviceworkers', 'websql'] }); } catch (_) {}
+  }
   [profilesStore, settingsStore, downloadsStore, extensionsStore, accountStore].forEach(s => s.flush && s.flush());
   if (bookmarksStore) bookmarksStore.flush && bookmarksStore.flush();
   if (historyStore) historyStore.flush && historyStore.flush();
@@ -628,6 +737,23 @@ ipcMain.on('register-webview', (event, id) => {
   const wc = webContents.fromId(id);
   if (wc && !wc.isDestroyed()) {
     attachShortcuts(wc);
+    if (!wc.__flowrNavigationWired) {
+      wc.__flowrNavigationWired = true;
+      const record = (_event, url) => {
+        if (!/^https?:\/\//i.test(url || '')) return;
+        let title = '';
+        try { title = wc.getTitle(); } catch (_) {}
+        addToHistory(url, title);
+      };
+      wc.on('did-navigate', record);
+      wc.on('did-navigate-in-page', record);
+      wc.on('page-title-updated', (_event, title) => {
+        let url = '';
+        try { url = wc.getURL(); } catch (_) {}
+        if (/^https?:\/\//i.test(url)) addToHistory(url, title);
+      });
+      wc.on('context-menu', (_event, params) => showSiteContextMenu(wc, params));
+    }
     wc.setWindowOpenHandler(({ url }) => {
       if (/^https?:\/\//i.test(url)) {
         const shouldBlockPopup = shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled);
@@ -1200,10 +1326,12 @@ ipcMain.handle('get-note-folders', () => notesStore.get('folders') || []);
 
 ipcMain.handle('clear-browsing-data', async () => {
   try {
-    await session.defaultSession.clearCache();
-    await session.defaultSession.clearStorageData({ storages: ['cookies', 'localstorage', 'caches', 'indexdb', 'serviceworkers', 'websql'] });
+    const targetSession = browsingSession || session.defaultSession;
+    await targetSession.clearCache();
+    await targetSession.clearStorageData({ storages: ['cookies', 'localstorage', 'caches', 'indexdb', 'serviceworkers', 'websql'] });
   } catch (_) {}
-  historyStore.set('history', []);
+  writeHistory([]);
+  send('history-changed', []);
   return true;
 });
 
@@ -1242,6 +1370,14 @@ ipcMain.handle('update-settings', (event, patch) => {
   Object.entries(patch || {}).forEach(([key, value]) => settingsStore.set(key, value));
   trackerBlockingEnabled = settingsStore.get('blockTrackers') !== false;
   adBlockerEnabled = settingsStore.get('adBlocker') !== false;
+  if (patch && ('privateHistory' in patch || 'historyRetention' in patch || 'autoClearSites' in patch)) {
+    const current = readHistory();
+    writeHistory(current);
+    send('history-changed', settingsStore.get('historyLock') && !vault.isUnlocked() ? [] : current);
+  }
+  if (patch && 'historyLock' in patch) {
+    send('history-changed', settingsStore.get('historyLock') && !vault.isUnlocked() ? [] : readHistory());
+  }
   return settingsStore.data;
 });
 
@@ -1344,10 +1480,13 @@ ipcMain.handle('move-bookmark', (event, url, folder) => {
   return next;
 });
 
-ipcMain.handle('get-history', () => historyStore.get('history') || []);
+ipcMain.handle('get-history', () => {
+  if (settingsStore.get('historyLock') && !vault.isUnlocked()) return [];
+  return readHistory();
+});
 
 ipcMain.handle('clear-history', () => {
-  historyStore.set('history', []);
+  writeHistory([]);
   send('history-changed', []);
   return [];
 });
