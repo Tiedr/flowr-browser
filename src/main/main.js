@@ -661,6 +661,9 @@ function createWindow() {
     ? 'http://localhost:8081'
     : `file://${path.join(__dirname, '../../dist/index.html')}`;
 
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (process.env.FLOW_START_URL) send('open-start-url', process.env.FLOW_START_URL);
+  });
   mainWindow.loadURL(startUrl).catch(() => revealWindow());
 
   browsingSession.on('will-download', (event, item) => {
@@ -938,6 +941,7 @@ ipcMain.on('new-window', (event, opts) => {
   const args = process.defaultApp ? [app.getAppPath()] : [];
   const env = { ...process.env };
   if (opts && opts.incognito) env.FLOW_INCOGNITO = '1'; else delete env.FLOW_INCOGNITO;
+  if (opts?.url) env.FLOW_START_URL = String(opts.url);
   try { spawn(process.execPath, args, { detached: true, stdio: 'ignore', env }).unref(); } catch (_) {}
 });
 

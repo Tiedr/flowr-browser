@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image } from 'react-native';
 import Overlay from './Overlay';
 import {
-  Accessibility, AlertCircle, ArrowLeft, ArrowRight, Ban, Bookmark, CheckCircle, ChevronRight, Clock, Cloud, Copy, CreditCard, Cpu,
+  Accessibility, AlertCircle, ArrowLeft, ArrowRight, Ban, Bookmark, BookmarkPlus, CheckCircle, ChevronRight, Clock, Cloud, Copy, CreditCard, Cpu,
   Download, ExternalLink, Eye, EyeOff, Folder, FolderInput, FolderOpen, FolderPlus, Gauge, Github, Globe, History, Home, Info, KeyRound, Languages, LayoutGrid, Lock,
   LogIn, LogOut, Menu, Minus, MoreHorizontal, Palette, Pause, Pin, Play, Plus, Puzzle, RotateCcw, Search, Settings, SlidersHorizontal,
   Shield, ShieldCheck, Sparkles, Square, Star, Trash2, User, UserCheck, Wallet, FileText, X, Youtube, RefreshCw,
@@ -366,6 +366,10 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
         if (dragRef.current?.moved && targetId && targetId !== dragRef.current.id) onGroupTabs?.(dragRef.current.id, targetId);
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
+        if (dragRef.current?.moved && !targetId) {
+          const dragged = tabs.find(item => item.id === dragRef.current.id);
+          if (dragged?.url && dragged.url !== 'about:blank') ipc?.send('new-window', { incognito: false, url: dragged.url });
+        }
         if (dragRef.current?.moved) { suppress.current = true; setTimeout(() => (suppress.current = false), 0); }
         dragRef.current = null; setDrag(null);
       };
@@ -539,9 +543,8 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, hom
         )}
       </View>
       <View style={[s.navDivider, { backgroundColor: theme.border }]} />
-      {isWeb && tab.url !== 'about:blank' ? <View style={{ position: 'relative' }}><I icon={LayoutGrid} label={tab.groupId ? 'Remove tab from group' : groupSuggestion?.length > 1 ? `Group ${groupSuggestion.length} related tabs` : 'Group this tab'} onPress={onGroup} solid={!!tab.groupId || groupSuggestion?.length > 1} theme={theme} />{!tab.groupId && groupSuggestion?.length > 1 ? <View style={{ position: 'absolute', right: -2, top: -3, minWidth: 14, height: 14, borderRadius: 7, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accent }}><Text style={{ fontSize: 8.5, fontWeight: '800', color: theme.onAccent }}>{groupSuggestion.length}</Text></View> : null}</View> : null}
-      {isWeb ? <I icon={PanelTopOpen} label={splitTabId ? 'Close split view' : 'Open split view'} onPress={onSplit} solid={!!splitTabId} theme={theme} /> : null}
-      {isWeb && tab.url !== 'about:blank' ? <I icon={Download} label={tab.pwa?.manifest ? 'Install this PWA in Flowr' : 'Add this site to Flowr apps'} onPress={onInstallApp} solid={!!tab.pwa?.manifest} theme={theme} /> : null}
+      {isWeb ? <I icon={Columns} label={splitTabId ? 'Cancel split view' : 'Split view'} onPress={onSplit} solid={!!splitTabId} theme={theme} /> : null}
+      {isWeb && tab.url !== 'about:blank' ? <I icon={tab.pwa?.manifest ? Download : BookmarkPlus} label={tab.pwa?.manifest ? 'Install this PWA in Flowr' : 'Save site to Flowr start page'} onPress={onInstallApp} solid={!!tab.pwa?.manifest} theme={theme} /> : null}
       <I icon={Star} label="Bookmark" onPress={bookmark} solid={bookmarked} theme={theme} />
       {updateStatus?.available ? <View style={{ position: 'relative' }}>
         <I icon={ArrowUpCircle} label={updateStatus.phase === 'downloaded' ? 'Install Flowr update' : `Update to Flowr ${updateStatus.latestVersion || ''}`} onPress={onUpdate} solid theme={theme} />
@@ -2076,6 +2079,8 @@ export default function App() {
   }, [settings.siteApps]);
   const relatedTabs = useMemo(() => {
     if (!isWeb || !tab.url || tab.url === 'about:blank') return [];
+    const exact = tabs.filter(item => item.kind === 'web' && item.url === tab.url).map(item => item.id);
+    if (exact.length > 1) return exact;
     let key = ''; try { const parts = new URL(tab.url).hostname.replace(/^www\./, '').split('.'); key = parts.slice(-2).join('.'); } catch (_) {}
     return tabs.filter(item => item.kind === 'web' && item.url && item.url !== 'about:blank' && (() => { try { const parts = new URL(item.url).hostname.replace(/^www\./, '').split('.'); return parts.slice(-2).join('.') === key; } catch (_) { return false; } })()).map(item => item.id);
   }, [tabs, tab.id, tab.url, isWeb]);
@@ -2105,9 +2110,9 @@ export default function App() {
   }, [activeId, isWeb, splitTabId, tabs]);
 
   useEffect(() => {
-    if (settings.memorySaver === false) return undefined;
+    if (settings.memorySaver !== true) return undefined;
     const sweep = () => {
-      const cutoff = Date.now() - Math.max(5, Number(settings.inactiveTabTimeout) || 10) * 60 * 1000;
+      const cutoff = Date.now() - Math.max(30, Number(settings.inactiveTabTimeout) || 30) * 60 * 1000;
       setTabs(current => current.map(t => (
         t.kind === 'web' && t.id !== activeIdRef.current && t.url && t.url !== 'about:blank' &&
         !t.loading && !t.discarded && (t.lastActiveAt || 0) < cutoff
@@ -2236,6 +2241,26 @@ export default function App() {
     const color = colors[Math.abs(label.length) % colors.length];
     setTabs(items => items.map(item => ids.includes(item.id) ? { ...item, groupId, groupLabel: label, groupColor: color } : item));
   }, [relatedTabs]);
+
+  // Duplicate URLs are almost always intentional parallel work. Keep them
+  // together automatically so reopening a page does not leave scattered tabs.
+  useEffect(() => {
+    const duplicates = new Map();
+    tabs.forEach(item => { if (item.kind === 'web' && item.url && item.url !== 'about:blank') { const list = duplicates.get(item.url) || []; list.push(item); duplicates.set(item.url, list); } });
+    const groups = [...duplicates.values()].filter(list => list.length > 1 && list.some(item => !item.groupId));
+    if (!groups.length) return;
+    setTabs(items => {
+      let changed = false;
+      const next = items.map(item => {
+        const group = groups.find(list => list.some(candidate => candidate.id === item.id));
+        if (!group || item.groupId) return item;
+        changed = true;
+        let label = 'Duplicate tabs'; try { label = new URL(item.url).hostname.replace(/^www\./, '') || label; } catch (_) {}
+        return { ...item, groupId: `duplicate-${encodeURIComponent(group[0].url)}`, groupLabel: label, groupColor: '#14b8a6' };
+      });
+      return changed ? next : items;
+    });
+  }, [tabs]);
 
   const toggleSplitView = useCallback(() => {
     if (splitTabId) { setSplitTabId(null); return; }
@@ -2421,6 +2446,8 @@ export default function App() {
       { type: 'sep' },
       { label: 'Reload', icon: 'RotateCcw', disabled: target.kind !== 'web', action: { tab: 'reload', id: target.id } },
       { label: 'Duplicate', icon: 'Copy', disabled: target.kind !== 'web', action: { tab: 'duplicate', id: target.id } },
+      { label: 'Split tab to the left', icon: 'PanelLeft', disabled: target.kind !== 'web', action: { tab: 'split-left', id: target.id } },
+      { label: 'Split tab to the right', icon: 'PanelRight', disabled: target.kind !== 'web', action: { tab: 'split-right', id: target.id } },
       { label: target.pinned ? 'Unpin' : 'Pin', icon: 'Pin', action: { tab: 'pin', id: target.id } },
       { label: target.muted ? 'Unmute site' : 'Mute site', icon: 'Volume2', disabled: target.kind !== 'web', action: { tab: 'mute', id: target.id } },
       { type: 'sep' },
@@ -2519,7 +2546,11 @@ export default function App() {
       else if (a.tab === 'close-right') { const index = tabs.findIndex(item => item.id === a.id); tabs.slice(index + 1).forEach(item => closeTab(item.id)); }
       else if (a.tab === 'duplicate') openWebTab(target.url);
       else if (a.tab === 'reload') { setActiveId(a.id); setTimeout(() => { try { webviewsRef.current.get(a.id)?.reload(); } catch (_) {} }, 0); }
-      else if (a.tab === 'split') { setActiveId(a.id); const other = tabs.find(item => item.kind === 'web' && item.id !== a.id); if (other) setSplitTabId(other.id); }
+      else if (a.tab === 'split' || a.tab === 'split-left' || a.tab === 'split-right') {
+        const target = tabs.find(item => item.id === a.id);
+        const other = tabs.find(item => item.kind === 'web' && item.id !== a.id && item.url && item.url !== 'about:blank');
+        if (target && other) { setActiveId(a.tab === 'split-left' ? other.id : target.id); setSplitTabId(a.tab === 'split-left' ? target.id : other.id); }
+      }
       else if (a.tab === 'group') { if (target.groupId) setTabs(items => items.map(item => item.id === a.id ? { ...item, groupId: null, groupLabel: '', groupColor: '' } : item)); else groupDroppedTabs(a.id, a.id === activeIdRef.current ? (tabs.find(item => item.id !== a.id)?.id || a.id) : activeIdRef.current); }
       else if (a.tab === 'pin') setTabs(items => { const next = items.map(item => item.id === a.id ? { ...item, pinned: !item.pinned } : item); return [...next.filter(item => item.pinned), ...next.filter(item => !item.pinned)]; });
       else if (a.tab === 'mute') { const wv = webviewsRef.current.get(a.id); const id = wv?.getWebContentsId?.(); if (id) ipc?.send('view-command', id, 'mute'); setTabs(items => items.map(item => item.id === a.id ? { ...item, muted: !item.muted } : item)); }
@@ -2593,6 +2624,7 @@ export default function App() {
     load();
     ipc.invoke('get-view-preload').then(url => setPreloadUrl(url || '')).catch(() => setPreloadUrl(''));
     listen('request-new-tab', u => openWebTab(u));
+    listen('open-start-url', u => { if (u) openWebTab(u); });
     listen('downloads-changed', x => setDownloads(x || []));
     listen('history-changed', x => { setHistory(x || []); ipc.invoke('get-top-sites').then(sites => setTopSites(sites || [])); });
     // Pushed by a background Tieddr Space sync (on sign-in, on startup if
@@ -2612,7 +2644,7 @@ export default function App() {
     listen('side-panel-opened', info => setSidePanel({ open: true, extId: info?.extId || null, url: info?.url || null, width: info?.width || 400, incognito: !!info?.incognito }));
     listen('side-panel-closed', () => setSidePanel({ open: false, extId: null, url: null }));
     listen('memory-pressure', () => setTabs(current => current.map(t => (
-      t.kind === 'web' && t.id !== activeIdRef.current && t.url && t.url !== 'about:blank' && !t.loading
+      t.kind === 'web' && t.id !== activeIdRef.current && t.id !== splitTabId && t.url && t.url !== 'about:blank' && !t.loading && (Date.now() - (t.lastActiveAt || 0)) > 30 * 60 * 1000
         ? { ...t, discarded: true }
         : t
     ))));
