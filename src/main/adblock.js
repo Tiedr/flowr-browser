@@ -13,11 +13,16 @@ const BLOCKED_HOSTS = new Set([
   'pubmatic.com', 'quantserve.com', 'revjet.com', 'rubiconproject.com',
   'scorecardresearch.com', 'segment.com', 'segment.io', 'serving-sys.com',
   'sharethrough.com', 'smartadserver.com', 'spotxchange.com', 'taboola.com',
-  'teads.tv', 'turn.com', 'webminepool.com', 'yieldmo.com'
+  'teads.tv', 'turn.com', 'webminepool.com', 'yieldmo.com',
+  'adsterra.com', 'clickadu.com', 'clickaine.com', 'evadav.com', 'exoclick.com',
+  'hilltopads.net', 'juicyads.com', 'mgid.com', 'monetag.com', 'onclickads.net',
+  'popads.net', 'popcash.net', 'propellerads.com', 'pushground.com', 'richads.com',
+  'trafficjunky.net', 'zeropark.com', 'adtrafficquality.google'
 ]);
 
 const TRACKING_PATH = /(?:^|[\/_-])(?:ads?|adserver|advert|analytics|beacon|collect|conversion|pixel|sponsor|telemetry|track(?:er|ing)?)(?:[\/_?.-]|$)/i;
 const MAIN_FRAME_TRACKING_PATH = /(?:^|[\/_-])(?:ad(s|vert|server|service)|sponsor|promo|promotion|banner|tracking|analytics|telemetry)(?:[\/_?.-]|$)/i;
+const REDIRECT_TRAP = /(?:^|[?&#\/_-])(?:adurl|clickid|click_id|clickurl|popunder|popup|redirect(?:_url)?|sponsor|subid|zoneid)(?:=|[\/_-]|$)/i;
 const FILTERED_TYPES = new Set([
   'mainFrame',
   'image',
@@ -63,6 +68,7 @@ function shouldBlockRequest(details, enabled = true) {
   const targetHost = normaliseHost(target.hostname);
   const thirdParty = sourceHost && targetHost !== sourceHost && !targetHost.endsWith(`.${sourceHost}`);
   const combinedPath = `${target.pathname}${target.search}`;
+  if (type === 'mainFrame' && thirdParty && REDIRECT_TRAP.test(`${target.hostname}${combinedPath}`)) return true;
   if (type === 'mainFrame' && (!sourceHost || thirdParty) && MAIN_FRAME_TRACKING_PATH.test(combinedPath)) return true;
   return Boolean(thirdParty && TRACKING_PATH.test(`${target.pathname}${target.search}`));
 }

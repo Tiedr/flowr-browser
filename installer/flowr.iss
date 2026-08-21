@@ -1,5 +1,5 @@
 #define MyAppName "Flowr"
-#define MyAppVersion "1.1.7"
+#define MyAppVersion "1.1.8"
 [Setup]
 AppId={{A12C0CB9-4DCE-4F43-A860-9E73B94A87F6}
 AppName={#MyAppName}
@@ -11,7 +11,7 @@ DefaultDirName={autopf}\Flowr
 DefaultGroupName=Flowr
 DisableProgramGroupPage=yes
 OutputDir=..\release_v5
-OutputBaseFilename=Flowr-Installer-1.1.7
+OutputBaseFilename=Flowr-Installer-1.1.8
 SetupIconFile=..\release_v5\.icon-ico\icon.ico
 UninstallDisplayIcon={app}\Flowr.exe
 Compression=lzma2/fast
@@ -136,7 +136,7 @@ begin
     StageTitle.Caption := 'Building your browser.';
     StageBody.Caption := 'Installing the optimized browser engine, private browsing tools and your Tieddr integrations. This normally takes less than a minute.';
     StagePercent.Caption := 'PREPARING';
-    StageRightEyebrow.Caption := 'FLOWR  /  1.1.7';
+    StageRightEyebrow.Caption := 'FLOWR  /  1.1.8';
     StageRightTitle.Caption := 'Private.' + #13#10 + 'Personal.' + #13#10 + 'Yours.';
     StageRightBody.Caption := 'Optimized Chromium engine' + #13#10 + 'Tieddr Vault + Space' + #13#10 + 'Mavis built in';
     WizardForm.ProgressGauge.Visible := True;

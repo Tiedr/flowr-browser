@@ -102,7 +102,9 @@ const SETTINGS_DEFAULTS = {
   accentColor: '',
   startBackground: 'gradient-midnight',
   onboardingCompleted: false,
-  lastSeenVersion: ''
+  lastSeenVersion: '',
+  tieddrNewsEndpoint: 'https://news.tieddr.com/api/feed',
+  siteApps: []
 };
 const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
 // Existing installations inherited Memory Saver's old no-op/disabled default.
@@ -380,6 +382,7 @@ function shortcutFor(input) {
   if (ctrl && key === 'd') return 'bookmark-page';
   if (ctrl && key === 'h') return 'history';
   if (ctrl && key === 'j') return 'downloads';
+  if (ctrl && key === 'p') return 'print';
   if (ctrl && key === ',') return 'settings';
   if (key === 'f9') return 'reader';
   if (ctrl && /^[1-9]$/.test(key)) return key === '9' ? 'tab-last' : `tab-${key}`;
@@ -405,6 +408,7 @@ const READER_JS = `(function(){
   var fg=dark?'#e7e7e8':'#1c1c1e', bg=dark?'#17181c':'#faf8f4', sub=dark?'#8a8f98':'#8c857a', rule=dark?'#2a2c33':'#e7e1d6', lnk=dark?'#7aa2ff':'#2963d6';
   var o=document.createElement('div');o.id=ID;o.tabIndex=-1;
   o.style.cssText='position:fixed;inset:0;z-index:2147483646;overflow-y:auto;-webkit-overflow-scrolling:touch;background:'+bg+';color:'+fg+';';
+  var close=document.createElement('button');close.textContent='Close reading mode';close.setAttribute('aria-label','Close reading mode');close.style.cssText='position:fixed;right:24px;top:22px;z-index:2;border:1px solid '+rule+';border-radius:999px;padding:10px 15px;background:'+bg+';color:'+fg+';font:650 13px/1 -apple-system,"Segoe UI",sans-serif;cursor:pointer;box-shadow:0 8px 26px rgba(0,0,0,.12)';close.onclick=function(){o.remove();document.documentElement.style.overflow='';};o.appendChild(close);
   var w=document.createElement('div');
   w.style.cssText='max-width:700px;margin:0 auto;padding:76px 26px 160px;font:19px/1.78 Georgia,Cambria,"Times New Roman",serif;';
   var h1=document.querySelector('h1');
@@ -816,21 +820,33 @@ ipcMain.on('register-webview', (event, id) => {
     attachShortcuts(wc);
     if (!wc.__flowrNavigationWired) {
       wc.__flowrNavigationWired = true;
-      const record = (_event, url) => {
+      const record = (_event, url, _httpResponseCode, _httpStatusText, isMainFrame) => {
+        if (isMainFrame === false) return;
         if (!/^https?:\/\//i.test(url || '')) return;
         let title = '';
         try { title = wc.getTitle(); } catch (_) {}
         addToHistory(url, title);
       };
       wc.on('did-navigate', record);
-      wc.on('did-navigate-in-page', record);
+      wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+        if (isMainFrame === false || !/^https?:\/\//i.test(url || '')) return;
+        let title = ''; try { title = wc.getTitle(); } catch (_) {}
+        addToHistory(url, title);
+      });
       wc.on('page-title-updated', (_event, title) => {
         let url = '';
         try { url = wc.getURL(); } catch (_) {}
         if (/^https?:\/\//i.test(url)) addToHistory(url, title);
       });
-      wc.on('context-menu', (_event, params) => showSiteContextMenu(wc, params));
+      wc.on('context-menu', (_event, params) => send('show-context-menu', { ...contextParams(params), webContentsId: wc.id, ui: false }));
       wc.on('will-redirect', (event, url) => {
+        let sourceUrl = '';
+        try { sourceUrl = wc.getURL(); } catch (_) {}
+        if (shouldBlockRequest({ url, resourceType: 'mainFrame', initiator: sourceUrl, referrer: sourceUrl }, adBlockerEnabled)) {
+          event.preventDefault();
+          send('ad-navigation-blocked', { sourceUrl, url });
+          return;
+        }
         if (!settingsStore.get('askBeforeIdentityRedirect')) return;
         let destination = '';
         try { destination = new URL(url).hostname.toLowerCase(); } catch (_) { return; }
@@ -871,6 +887,7 @@ ipcMain.on('view-command', (event, id, cmd, arg) => {
     case 'forward': if (wc.canGoForward()) wc.goForward(); break;
     case 'reload': wc.reload(); break;
     case 'hard-reload': wc.reloadIgnoringCache(); break;
+    case 'mute': wc.setAudioMuted(!wc.isAudioMuted()); break;
     case 'stop': wc.stop(); break;
     case 'copy': wc.copy(); break;
     case 'cut': wc.cut(); break;
@@ -881,8 +898,8 @@ ipcMain.on('view-command', (event, id, cmd, arg) => {
     case 'copyText': if (arg) clipboard.writeText(arg); break;
     case 'copyImage': if (arg) wc.copyImageAt(arg.x, arg.y); break;
     case 'saveImage': if (arg) wc.downloadURL(arg); break;
-    case 'inspect': if (arg) wc.inspectElement(arg.x | 0, arg.y | 0); break;
-    case 'devtools': wc.toggleDevTools(); break;
+    case 'inspect': if (arg) { wc.openDevTools({ mode: 'right', activate: true }); wc.inspectElement(arg.x | 0, arg.y | 0); } break;
+    case 'devtools': wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode: 'right', activate: true }); break;
     case 'reader': wc.executeJavaScript(READER_JS).catch(() => {}); break;
     case 'print': wc.print(); break;
     case 'savePage': {
@@ -1177,6 +1194,93 @@ ipcMain.handle('open-external', (_event, url) => {
   if (!/^https:\/\//i.test(String(url || ''))) return false;
   void shell.openExternal(url);
   return true;
+});
+
+ipcMain.handle('create-print-preview', async (_event, id, options = {}) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return { ok: false, error: 'The page is no longer available.' };
+  try {
+    const pdf = await wc.printToPDF({
+      printBackground: options.printBackground !== false,
+      landscape: !!options.landscape,
+      pageSize: options.pageSize || 'A4'
+    });
+    return { ok: true, dataUrl: `data:application/pdf;base64,${pdf.toString('base64')}`, bytes: pdf.length };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Could not create the print preview.' };
+  }
+});
+
+ipcMain.handle('capture-webview-preview', async (_event, id) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return '';
+  try {
+    const image = await wc.capturePage();
+    return image.resize({ width: 420, quality: 'good' }).toDataURL();
+  } catch (_) { return ''; }
+});
+
+ipcMain.handle('print-page', async (_event, id, options = {}) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return { ok: false, error: 'The page is no longer available.' };
+  return new Promise(resolve => wc.print({
+    silent: false,
+    printBackground: options.printBackground !== false,
+    landscape: !!options.landscape,
+    pageSize: options.pageSize || 'A4',
+    margins: { marginType: options.marginType || 'default' }
+  }, (success, failureReason) => resolve(success ? { ok: true } : { ok: false, error: failureReason || 'Printing was cancelled.' })));
+});
+
+ipcMain.handle('mavis-chat', async (_event, payload = {}) => {
+  const account = accountStore.get('account');
+  if (!account?.token) return { ok: false, requiresAccount: true, error: 'Connect your Tieddr Account to use Mavis.' };
+  const input = String(payload.input || '').trim();
+  if (!input) return { ok: false, error: 'Ask Mavis something first.' };
+  try {
+    vaultAccount.setAccessToken(account.token);
+    const jwt = await vaultAccount.getAppwriteJwt();
+    if (!jwt) return { ok: false, requiresAccount: true, error: 'Your Tieddr session needs to be refreshed.' };
+    let pageContext = String(payload.context || '').slice(0, 8000);
+    const wc = payload.webContentsId ? webContents.fromId(payload.webContentsId) : null;
+    if (wc && !wc.isDestroyed()) {
+      try {
+        const page = await wc.executeJavaScript(`({title:document.title,url:location.href,text:(document.querySelector('main,article,[role=main]')||document.body)?.innerText?.slice(0,6000)||''})`);
+        pageContext = `The user is browsing in Flowr.\nPage: ${page?.title || ''}\nURL: ${page?.url || ''}\nVisible page text:\n${page?.text || ''}\n${pageContext}`.slice(0, 10000);
+      } catch (_) {}
+    }
+    const response = await fetch('https://space.tieddr.com/api/mavis', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jwt, action: 'ask', input, context: pageContext, history: Array.isArray(payload.history) ? payload.history.slice(-12) : [] })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, error: data.error || `Mavis returned ${response.status}.` };
+    return { ok: true, ...data };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Mavis is unavailable right now.' };
+  }
+});
+
+ipcMain.handle('get-tieddr-news', async () => {
+  const endpoint = settingsStore.get('tieddrNewsEndpoint') || 'https://news.tieddr.com/api/feed';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(endpoint, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`Feed returned ${response.status}`);
+    const payload = await response.json();
+    const source = Array.isArray(payload) ? payload : (payload.items || payload.articles || []);
+    const items = source.slice(0, 12).map((item, index) => ({
+      id: String(item.id || item.url || index), title: String(item.title || '').trim(),
+      summary: String(item.summary || item.description || '').trim(), url: String(item.url || item.link || ''),
+      image: String(item.image || item.imageUrl || ''), source: String(item.source?.name || item.source || 'Tieddr News'),
+      publishedAt: item.publishedAt || item.published_at || item.date || ''
+    })).filter(item => item.title && /^https?:\/\//i.test(item.url));
+    return { ok: true, items, endpoint };
+  } catch (error) {
+    return { ok: false, items: [], endpoint, error: error?.name === 'AbortError' ? 'Tieddr News took too long to respond.' : 'Tieddr News is not available yet.' };
+  }
 });
 
 ipcMain.handle('import-browser-data', async () => {
