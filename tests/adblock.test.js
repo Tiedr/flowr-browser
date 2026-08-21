@@ -4,6 +4,7 @@ const { isBlockedHost, shouldBlockRequest } = require('../src/main/adblock');
 assert.equal(isBlockedHost('securepubads.g.doubleclick.net'), true);
 assert.equal(isBlockedHost('doubleclick.net'), true);
 assert.equal(isBlockedHost('example.com'), false);
+assert.equal(isBlockedHost('ep2.adtrafficquality.google'), true);
 assert.equal(shouldBlockRequest({ url: 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', resourceType: 'script' }), true);
 assert.equal(shouldBlockRequest({ url: 'https://doubleclick.net/ad.js', resourceType: 'mainFrame' }), true);
 assert.equal(shouldBlockRequest({ url: 'https://example.com/ads/banner/home', resourceType: 'mainFrame' }), true);

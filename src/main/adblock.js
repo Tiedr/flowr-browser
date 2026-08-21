@@ -17,7 +17,7 @@ const BLOCKED_HOSTS = new Set([
   'adsterra.com', 'clickadu.com', 'clickaine.com', 'evadav.com', 'exoclick.com',
   'hilltopads.net', 'juicyads.com', 'mgid.com', 'monetag.com', 'onclickads.net',
   'popads.net', 'popcash.net', 'propellerads.com', 'pushground.com', 'richads.com',
-  'trafficjunky.net', 'zeropark.com'
+  'trafficjunky.net', 'zeropark.com', 'adtrafficquality.google'
 ]);
 
 const TRACKING_PATH = /(?:^|[\/_-])(?:ads?|adserver|advert|analytics|beacon|collect|conversion|pixel|sponsor|telemetry|track(?:er|ing)?)(?:[\/_?.-]|$)/i;

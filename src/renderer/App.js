@@ -10,8 +10,8 @@ import {
   Wifi, Globe2, Server, Monitor, Keyboard, HardDrive, Code2, Rocket, Zap,
   Mouse, PanelTop, PanelTopOpen, Maximize2, Minimize2, Layers, BookOpen, ZapOff,
   Fingerprint, Scan, Webhook, Database, Upload, GitBranch, Terminal,
-  FileCode, GlobeLock, Hand, MessageSquare, Focus, Volume2,
-  MonitorSpeaker, Network, Radar, Timer, ArrowUpCircle, Columns2
+  FileCode, Hand, MessageSquare, Focus, Volume2,
+  MonitorSpeaker, Network, Radar, Timer, ArrowUpCircle, Columns
 } from 'lucide-react';
 
 import { ipc, CHROME_H, BANNER_H, FIND_H, APP_VERSION, EASE, T_BG, HOVER, THEMES, ACCENT_PRESETS, START_BGS, ENGINES, PAGES, TIEDDR_APPS, resolveTheme, urlOf, host, when, bytes, trunc, storeIdOf, Brand, TieddrMark, VaultMark, SiteIcon, GLASS_LIGHT, GLASS_MEDIUM, GLASS_HEAVY } from './utils';
@@ -284,11 +284,13 @@ function StartMini({ title, action, onAction, rows, icon: Icon, empty, go, isLig
 
 // Adaptive tabs: each flexes to share the bar and shrinks as more open. Tabs
 // spring in on open and can be dragged to reorder (lift + live shuffle).
-function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, account, closingTabs, theme }) {
+function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, onTabMenu, incognito, account, closingTabs, theme }) {
   const stripRef = useRef(null);
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
   const suppress = useRef(false);
+  const [peek, setPeek] = useState(null);
+  const peekTimer = useRef(null);
 
   useEffect(() => {
     const strip = stripRef.current;
@@ -309,7 +311,10 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
         if (d.moved && target !== curIndex) { onReorder(d.id, target); d.startX = ev.clientX; d.startIndex = target; setDrag({ id: d.id, dx: 0 }); }
         else setDrag({ id: d.id, dx: Math.max(-d.tabW, Math.min(d.tabW, dx % d.tabW)) });
       };
-      const up = () => {
+      const up = (ev) => {
+        const droppedOn = document.elementFromPoint?.(ev.clientX, ev.clientY)?.closest?.('[data-tabid]');
+        const targetId = droppedOn ? Number(droppedOn.getAttribute('data-tabid')) : null;
+        if (dragRef.current?.moved && targetId && targetId !== dragRef.current.id) onGroupTabs?.(dragRef.current.id, targetId);
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
         if (dragRef.current?.moved) { suppress.current = true; setTimeout(() => (suppress.current = false), 0); }
@@ -320,7 +325,8 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
     };
     strip.addEventListener('mousedown', onDown);
     return () => strip.removeEventListener('mousedown', onDown);
-  }, [tabs, onReorder]);
+  }, [tabs, onReorder, onGroupTabs]);
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
 
   return (
     <View style={[s.tabs, { backgroundColor: theme.chrome }]}>
@@ -344,7 +350,9 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
               style={[s.tab, T_BG, a ? { backgroundColor: theme.strong, borderColor: theme.border } : { borderColor: 'transparent' },
                 t.groupId && { borderTopWidth: 2, borderTopColor: t.groupColor || theme.accent },
                 dragging && { transform: [{ translateX: drag.dx }, { scale: 1.04 }], zIndex: 6, backgroundColor: theme.strong, borderColor: theme.accent, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }]}
-              onPress={() => { if (suppress.current) return; onSwitch(t.id); }}>
+              onPress={() => { if (suppress.current) return; onSwitch(t.id); }}
+              onContextMenu={e => { e.preventDefault?.(); e.stopPropagation?.(); setPeek(null); onTabMenu?.(t, e.clientX, e.clientY); }}
+              onMouseEnter={() => { clearTimeout(peekTimer.current); peekTimer.current = setTimeout(() => setPeek(t.id), 520); }} onMouseLeave={() => { clearTimeout(peekTimer.current); setPeek(null); }}>
               {t.groupId ? <View title={t.groupLabel || 'Tab group'} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.groupColor || theme.accent, flexShrink: 0 }} /> : null}
               {t.loading ? <View dataSet={{ spin: '1' }} style={s.spin}><RotateCcw size={13} color={theme.accent} /></View>
                 : page ? <PageIcon size={14} color={a ? theme.accent : theme.faint} />
@@ -352,6 +360,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
                     : <Globe size={14} color={a ? theme.accent : theme.faint} />}
               <Text style={[s.tt, { color: a ? theme.text : theme.muted }]} numberOfLines={1}>{page ? page.title : (t.title || host(t.url))}</Text>
               <TouchableOpacity dataSet={{ tabclose: '1', ...HOVER }} style={[s.close, T_BG]} onPress={e => { e.stopPropagation?.(); onClose(t.id); }}><X size={12} color={a ? theme.muted : theme.faint} /></TouchableOpacity>
+              {peek === t.id ? <View pointerEvents="none" style={{ position: 'absolute', top: 38, left: 0, width: 292, minHeight: 112, zIndex: 1200, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'fa', shadowColor: '#000', shadowOpacity: .3, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } }} {...GLASS_HEAVY}><View style={{ height: 48, borderRadius: 9, background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.soft})`, alignItems: 'center', justifyContent: 'center' }}>{t.favicon ? <Image source={{ uri: t.favicon }} style={{ width: 26, height: 26, borderRadius: 6 }} /> : <Globe size={24} color={theme.accent} />}</View><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700', marginTop: 10 }} numberOfLines={1}>{t.title || host(t.url)}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }} numberOfLines={1}>{t.url === 'about:blank' ? 'New tab' : t.url}</Text></View> : null}
             </TouchableOpacity>
           );
         })}
@@ -850,7 +859,7 @@ function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onD
     { eyebrow: 'You are ready', title: 'A faster, quieter web starts now.', text: 'Tracker protection, redirect controls, Memory Saver, side apps, and Mavis are ready when you are.', icon: ShieldCheck }
   ] : [
     { eyebrow: `Flowr ${APP_VERSION}`, title: 'Your browser just learned new moves.', text: 'This update introduces richer workspaces, smarter privacy, and a start page built around what you choose.', icon: Sparkles },
-    { eyebrow: 'Tabs that work together', title: 'Group it. Split it. Keep moving.', text: 'Group related tabs and work with two pages side by side without losing your place.', icon: Columns2 },
+    { eyebrow: 'Tabs that work together', title: 'Group it. Split it. Keep moving.', text: 'Group related tabs and work with two pages side by side without losing your place.', icon: Columns },
     { eyebrow: 'Apps and privacy', title: 'Your essentials, one gesture away.', text: 'Keep web apps in the side panel while redirect protection and Memory Saver work quietly underneath.', icon: ShieldCheck },
     { eyebrow: 'Ready when you are', title: 'Step into the new Flowr.', text: 'Everything is set. You can revisit these changes from Settings at any time.', icon: Gauge }
   ];
@@ -1719,9 +1728,11 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       h().addHistory(u, '');
     };
 
-    const onNav = (e, url) => { const u = resolveUrl(url, e?.url || ''); if (!u) return; updateFromUrl(u); };
-    const onNavInPage = (e, url) => { const u = resolveUrl(url, e?.url || ''); if (!u) return; h().updateUrl(tab.id, u); };
-    const onStartNav = (e) => { const u = resolveUrl(e?.url || '', ''); if (u) h().updateUrl(tab.id, u); };
+    const onNav = (e, url) => { if (e?.isMainFrame === false) return; const u = resolveUrl(url, e?.url || ''); if (!u) return; updateFromUrl(u); };
+    const onNavInPage = (e, url) => { if (e?.isMainFrame === false) return; const u = resolveUrl(url, e?.url || ''); if (!u) return; h().updateUrl(tab.id, u); };
+    // Google and YouTube continuously navigate hidden sodar/gapi frames. Never
+    // promote those subframe URLs into Flowr's address bar or active tab.
+    const onStartNav = (e) => { if (e?.isMainFrame === false) return; const u = resolveUrl(e?.url || '', ''); if (u) { h().clearNavError(tab.id); h().updateUrl(tab.id, u); } };
     const onTitle = (e, title) => { if (title) h().updateTitle(tab.id, title); };
     const onFavicon = (e, favicons) => { if (favicons && favicons[0]) h().updateFavicon(tab.id, favicons[0]); };
     const onStartLoad = () => h().updateLoading(tab.id, true);
@@ -1739,6 +1750,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     };
     const onFound = (e, result) => h().findResult(result);
     const onFail = (e, errorCode, errorDescription, validatedURL) => {
+      if (e?.isMainFrame === false) return;
       if (!validatedURL || validatedURL === 'about:blank' || errorCode === -3 || errorCode === -2) return;
       h().navError(tab.id, validatedURL, errorDescription);
     };
@@ -1942,6 +1954,7 @@ export default function App() {
     return tabs.filter(item => item.kind === 'web' && item.url && item.url !== 'about:blank' && (() => { try { const parts = new URL(item.url).hostname.replace(/^www\./, '').split('.'); return parts.slice(-2).join('.') === key; } catch (_) { return false; } })()).map(item => item.id);
   }, [tabs, tab.id, tab.url, isWeb]);
   const viewTop = CHROME_H + (findOpen && showViewLive ? FIND_H : 0) + (storeId ? BANNER_H : 0);
+  const activeDownload = downloads.find(item => ['progressing', 'paused'].includes(item.state));
 
   const activeIdRef = useRef(activeId); activeIdRef.current = activeId;
   const tabRef = useRef(tab); tabRef.current = tab;
@@ -2065,6 +2078,20 @@ export default function App() {
       const [moved] = next.splice(from, 1);
       next.splice(target, 0, moved);
       return next;
+    });
+  }, []);
+
+  const groupDroppedTabs = useCallback((sourceId, targetId) => {
+    const groupId = `group-${Date.now()}`;
+    const colors = ['#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#3b82f6'];
+    setTabs(items => {
+      const target = items.find(item => item.id === targetId);
+      const source = items.find(item => item.id === sourceId);
+      if (!target || !source) return items;
+      let label = 'Tab group'; try { label = new URL(target.url).hostname.replace(/^www\./, '').split('.')[0] || label; } catch (_) {}
+      const existingId = target.groupId || source.groupId || groupId;
+      const color = target.groupColor || source.groupColor || colors[Math.abs(label.length) % colors.length];
+      return items.map(item => item.id === sourceId || item.id === targetId ? { ...item, groupId: existingId, groupLabel: target.groupLabel || source.groupLabel || label, groupColor: color } : item);
     });
   }, []);
 
@@ -2243,6 +2270,23 @@ export default function App() {
     setOverlay({ kind: 'menu', theme, zoom: zoomRef.current, items, width: 288 });
   }, [splitTabId]);
 
+  const openTabMenu = useCallback((target, x, y) => {
+    const others = tabs.filter(item => item.id !== target.id);
+    setOverlay({ kind: 'context', theme, x, y, width: 292, items: [
+      { label: 'New tab to the right', icon: 'Plus', action: { tab: 'new-right', id: target.id } },
+      { label: 'Add tab to split view', icon: 'PanelTopOpen', disabled: target.kind !== 'web', action: { tab: 'split', id: target.id } },
+      { label: target.groupId ? 'Remove from tab group' : 'Add tab to new group', icon: 'LayoutGrid', action: { tab: 'group', id: target.id } },
+      { type: 'sep' },
+      { label: 'Reload', icon: 'RotateCcw', disabled: target.kind !== 'web', action: { tab: 'reload', id: target.id } },
+      { label: 'Duplicate', icon: 'Copy', disabled: target.kind !== 'web', action: { tab: 'duplicate', id: target.id } },
+      { label: 'Pin', icon: 'Pin', action: { tab: 'pin', id: target.id } },
+      { type: 'sep' },
+      { label: 'Close', icon: 'X', hint: 'Ctrl W', action: { tab: 'close', id: target.id } },
+      { label: 'Close other tabs', icon: 'Layers', disabled: !others.length, action: { tab: 'close-others', id: target.id } },
+      { label: 'Close tabs to the right', icon: 'ArrowRight', action: { tab: 'close-right', id: target.id } }
+    ] });
+  }, [tabs, theme]);
+
   // Build a context menu from the params reported by main, and open it as glass.
   const openContext = useCallback((p) => {
     setNavFocused(false);
@@ -2276,8 +2320,9 @@ export default function App() {
       }
     }
     const x = p.x;
-    const y = p.y;
-    setOverlay({ kind: 'context', theme, x, y, items, width: 244 });
+    const y = p.y + (p.ui ? 0 : viewTopRef.current);
+    items.forEach(item => { if (item.action?.cmd && p.webContentsId) item.action.targetId = p.webContentsId; });
+    setOverlay({ kind: 'context', theme, x, y, items, width: 286 });
   }, []);
 
   // Any right-click should close top chrome dropdowns, so context menus are never
@@ -2313,8 +2358,21 @@ export default function App() {
       }
     } else if (a.cmd) {
       const wv = activeWebview();
-      const id = wv && wv.getWebContentsId ? wv.getWebContentsId() : null;
+      const id = a.targetId || (wv && wv.getWebContentsId ? wv.getWebContentsId() : null);
       ipc?.send('view-command', id, a.cmd, a.arg);
+    }
+    else if (a.tab) {
+      const target = tabs.find(item => item.id === a.id);
+      if (!target) return;
+      if (a.tab === 'close') closeTab(a.id);
+      else if (a.tab === 'close-others') tabs.filter(item => item.id !== a.id).forEach(item => closeTab(item.id));
+      else if (a.tab === 'close-right') { const index = tabs.findIndex(item => item.id === a.id); tabs.slice(index + 1).forEach(item => closeTab(item.id)); }
+      else if (a.tab === 'duplicate') openWebTab(target.url);
+      else if (a.tab === 'reload') { setActiveId(a.id); setTimeout(() => { try { webviewsRef.current.get(a.id)?.reload(); } catch (_) {} }, 0); }
+      else if (a.tab === 'split') { setActiveId(a.id); const other = tabs.find(item => item.kind === 'web' && item.id !== a.id); if (other) setSplitTabId(other.id); }
+      else if (a.tab === 'group') { if (target.groupId) setTabs(items => items.map(item => item.id === a.id ? { ...item, groupId: null, groupLabel: '', groupColor: '' } : item)); else groupDroppedTabs(a.id, a.id === activeIdRef.current ? (tabs.find(item => item.id !== a.id)?.id || a.id) : activeIdRef.current); }
+      else if (a.tab === 'pin') setTabs(items => items.map(item => item.id === a.id ? { ...item, pinned: !item.pinned } : item));
+      else if (a.tab === 'new-right') { const id = openWebTab(); setTabs(items => { const from = items.findIndex(item => item.id === id); const at = items.findIndex(item => item.id === a.id); if (from < 0 || at < 0) return items; const next = items.slice(); const [created] = next.splice(from, 1); next.splice(at + 1, 0, created); return next; }); }
     }
     else if (a.open) openWebTab(a.open);
     else if (a.search) openWebTab(urlOf(a.search, settingsRef.current));
@@ -2329,7 +2387,7 @@ export default function App() {
     else if (a.kind === 'dd-ext-toggle') { toggleExtension(a.id, a.enabled); }
     else if (a.kind === 'dd-ext-pin') { pinExt(a.id, a.pinned); }
     else if (a.kind === 'dd-ext-settings' || a.kind === 'dd-ext-manage') { openPage('extensions'); }
-  }, [openWebTab, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt]);
+  }, [openWebTab, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt, tabs, closeTab, groupDroppedTabs]);
 
   useEffect(() => {
     const wv = activeWebview();
@@ -2367,7 +2425,8 @@ export default function App() {
         try { wv.goBack(); } catch (_) {}
       } else showDialog({ title: 'Extension could not be installed', message: result?.error || 'The extension package is invalid.' });
     },
-    navError: (id, url, msg) => showDialog({ title: 'Could not load page', message: `${host(url) || 'Page'}${msg ? ': ' + msg : ''} — the site may block embedding. Try opening in a new window.` })
+    clearNavError: (id) => setTabs(items => items.map(item => item.id === id && item.error ? { ...item, error: null } : item)),
+    navError: (id, url, msg) => setTabs(items => items.map(item => item.id === id ? { ...item, loading: false, error: { url, message: msg || 'The page could not be reached.' } } : item))
   };
   useEffect(() => { handlersRef.current = handlers; });
 
@@ -2542,7 +2601,7 @@ export default function App() {
   return (
     <View style={[s.app, { backgroundColor: theme.bg }]}>
       <View style={[s.chrome, { backgroundColor: theme.chrome + 'cc', borderBottomColor: theme.border + '60', zIndex: 1001 }]} {...GLASS_HEAVY}>
-        <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
+        <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} onGroupTabs={groupDroppedTabs} onTabMenu={openTabMenu} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
         <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked} updateStatus={updateStatus} onUpdate={() => updateStatus?.phase === 'downloaded' ? ipc.invoke('install-update') : updateStatus?.phase === 'available' ? ipc.invoke('download-update') : openPage('settings')} groupSuggestion={relatedTabs} onGroup={toggleTabGroup} splitTabId={splitTabId} onSplit={toggleSplitView} onInstallApp={installCurrentSite}
           pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} bookmarks={bookmarks} history={history} theme={theme}
           extPanelOpen={extPanelOpen} setExtPanelOpen={setExtPanelOpen} extActs={extActs} clickExt={clickExt} openPage={openPage} toggleExtension={toggleExtension} pinExt={pinExt} showViewLive={showViewLive} ddCooldownRef={navDdCooldownRef} urlWrapRef={urlWrapRef}
@@ -2597,6 +2656,13 @@ export default function App() {
                 {storeId ? <StoreBanner onGet={() => installStore(storeId)} busy={installing} theme={theme} /> : null}
               </View>
             )}
+            {tab.error ? <View style={[StyleSheet.absoluteFill, { zIndex: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg, padding: 40 }]}>
+              <View style={{ width: 76, height: 76, borderRadius: 26, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Shield size={34} color={theme.accent} /></View>
+              <Text style={{ color: theme.text, fontSize: 27, fontWeight: '780', letterSpacing: -.8, marginTop: 22 }}>This page could not be reached</Text>
+              <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, textAlign: 'center', maxWidth: 520, marginTop: 10 }}>{host(tab.error.url) || 'The website'} did not respond. Check your connection, firewall, or the address and try again.{tab.error.message ? `\n${tab.error.message}` : ''}</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}><TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={() => { handlers.clearNavError(tab.id); reload(); }}><RefreshCw size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Try again</Text></TouchableOpacity><TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={() => go('about:blank')}><Home size={16} color={theme.text} /><Text style={[s.actionText, { color: theme.text }]}>New tab</Text></TouchableOpacity></View>
+              <Text style={{ color: theme.faint, fontSize: 11, marginTop: 18 }}>FLOWR_NETWORK_ERROR</Text>
+            </View> : null}
           </>
         ) : null}
         {tabs.filter(t => t.kind !== 'web').map(t => (
@@ -2607,8 +2673,12 @@ export default function App() {
           </View>
         ))}
         {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} /> : null}
-        {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
+        {activeDownload ? <TouchableOpacity onPress={() => openPage('downloads')} style={{ position: 'absolute', right: sidePanel.open ? 420 : 16, top: 14, zIndex: 60, width: 286, minHeight: 58, padding: 11, borderRadius: 15, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'f2', shadowColor: '#000', shadowOpacity: .24, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }} {...GLASS_HEAVY}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Download size={17} color={theme.accent} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }} numberOfLines={1}>{activeDownload.filename}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{activeDownload.state === 'paused' ? 'Paused' : `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 0}% · Open downloads`}</Text></View><ChevronRight size={15} color={theme.faint} /></View>
+          <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden', marginTop: 9 }}><View style={{ height: '100%', width: `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 4}%`, backgroundColor: theme.accent }} /></View>
+        </TouchableOpacity> : null}
       </View>
+      {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
     </View>
   );
 }
