@@ -925,7 +925,7 @@ function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onD
   const CurrentIcon = current.icon;
   const last = step === steps.length - 1;
   return <View dataSet={{ welcome: '1' }} style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.bg, overflow: 'hidden' }}>
-    <View style={{ width: '57%', paddingHorizontal: 62, paddingVertical: 48, justifyContent: 'space-between', position: 'relative', background: `radial-gradient(circle at 16% 4%, ${theme.accentSoft}, transparent 28%), linear-gradient(155deg, ${theme.chrome}, ${theme.bg})` }}>
+    <View style={{ width: '57%', paddingHorizontal: 62, paddingVertical: 48, justifyContent: 'space-between', position: 'relative', background: START_BGS.find(item => item.id === 'flowr-abstract')?.css || `linear-gradient(155deg, ${theme.chrome}, ${theme.bg})` }}>
       <View dataSet={{ welcomeorb: 'a' }} style={{ position: 'absolute', width: 460, height: 460, borderRadius: 230, left: -180, bottom: -190, backgroundColor: theme.accentSoft, opacity: .72 }} />
       <View dataSet={{ welcomeorb: 'b' }} style={{ position: 'absolute', width: 300, height: 300, borderRadius: 150, right: -80, top: 50, backgroundColor: theme.accent, opacity: .1 }} />
       <View dataSet={{ welcomegrid: '1' }} style={{ position: 'absolute', inset: 0, opacity: .15, backgroundImage: `linear-gradient(${theme.border} 1px, transparent 1px), linear-gradient(90deg, ${theme.border} 1px, transparent 1px)`, backgroundSize: '42px 42px' }} />
@@ -1686,7 +1686,7 @@ function rectOf(el) {
   catch (_) { return { left: 0, top: 0 }; }
 }
 
-const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', onActivate, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
+const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', sidePanelWidth = 0, onActivate, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
   const hostRef = useRef(null);
   const activateRef = useRef(onActivate); activateRef.current = onActivate;
 
@@ -1902,7 +1902,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     if (wv && preloadUrl) wv.setAttribute('preload', preloadUrl);
   }, [preloadUrl]);
 
-  const splitStyle = layout === 'left' ? { left: 0, right: '50%', width: '50%' } : layout === 'right' ? { left: '50%', right: 0, width: '50%', borderLeft: '1px solid rgba(128,128,128,.28)' } : { left: 0, right: 0, width: '100%' };
+  const splitStyle = layout === 'left' ? { left: 0, right: '50%', width: '50%' } : layout === 'right' ? { left: '50%', right: sidePanelWidth, width: `calc(50% - ${sidePanelWidth / 2}px)`, borderLeft: '1px solid rgba(128,128,128,.28)' } : { left: 0, right: sidePanelWidth, width: `calc(100% - ${sidePanelWidth}px)` };
   return <div ref={hostRef} onMouseDown={onActivate} style={{ position: 'absolute', top: 0, bottom: 0, ...splitStyle, height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none', boxShadow: layout === 'right' ? '-1px 0 0 rgba(128,128,128,.35)' : 'none' }} />;
 });
 
@@ -1940,6 +1940,16 @@ function SideShortcutRail({ apps, active, onOpen, onClose, onMavis, theme }) {
     })}
     <View style={{ flex: 1 }} />
     <TouchableOpacity accessibilityLabel="Open Mavis" onPress={onMavis} style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 10, backgroundColor: active?.mavis ? theme.accentSoft : 'transparent' }}><Sparkles size={19} color={theme.accent} /></TouchableOpacity>
+  </View>;
+}
+
+function SplitChooser({ tabs, activeId, onChoose, onClose, theme }) {
+  const choices = tabs.filter(item => item.kind === 'web' && item.id !== activeId && item.url && item.url !== 'about:blank');
+  return <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '50%', zIndex: 7, backgroundColor: theme.chrome, borderLeftWidth: 1, borderLeftColor: theme.border, padding: 26 }} {...GLASS_HEAVY}>
+    <TouchableOpacity onPress={onClose} style={{ alignSelf: 'flex-end', padding: 7 }}><X size={18} color={theme.muted} /></TouchableOpacity>
+    <Text style={{ color: theme.text, fontSize: 16, fontWeight: '750', textAlign: 'center', marginTop: 34 }}>Choose a tab to add to split view</Text>
+    <ScrollView style={{ marginTop: 22 }} contentContainerStyle={{ gap: 8 }}>{choices.map(item => <TouchableOpacity key={item.id} onPress={() => onChoose(item.id, 'right')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: theme.soft, borderWidth: 1, borderColor: theme.border }}><View style={{ width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.panel }}>{item.favicon ? <Image source={{ uri: item.favicon }} style={{ width: 22, height: 22, borderRadius: 5 }} /> : <Globe size={20} color={theme.accent} />}</View><View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 12.5, fontWeight: '650' }}>{item.title || host(item.url)}</Text><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{host(item.url)}</Text></View></TouchableOpacity>)}</ScrollView>
+    {!choices.length ? <Text style={{ color: theme.muted, fontSize: 12.5, textAlign: 'center', marginTop: 22 }}>Open another website first, then choose Split view.</Text> : null}
   </View>;
 }
 
@@ -2028,6 +2038,7 @@ export default function App() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [splitTabId, setSplitTabId] = useState(null);
+  const [splitChooserOpen, setSplitChooserOpen] = useState(false);
   const urlRef = useRef(null);
   const extActsRef = useRef(extActs); extActsRef.current = extActs;
   const pendingPwRef = useRef(null);
@@ -2139,6 +2150,10 @@ export default function App() {
     setProfiles(p || []); setActiveProfile(a || 'default'); setExtensions(e || []); setFolders(f || []);
     setNotes(n || []); setNoteFolders(nf || []);
     if (r?.onboardingCompleted !== true || r?.lastSeenVersion !== APP_VERSION) {
+      if (r?.onboardingCompleted === true && r?.lastSeenVersion !== APP_VERSION) {
+        const markedSeen = await ipc.invoke('update-settings', { lastSeenVersion: APP_VERSION });
+        setSettings(v => ({ ...v, ...(markedSeen || {}), lastSeenVersion: APP_VERSION }));
+      }
       const id = nextId();
       setTabs(current => current.some(item => item.kind === 'welcome') ? current : current.concat({ id, kind: 'welcome', title: r?.onboardingCompleted === true ? `What's new` : 'Welcome', url: 'flow://welcome' }));
       setActiveId(current => current === 1 ? id : current);
@@ -2223,7 +2238,12 @@ export default function App() {
       let label = 'Tab group'; try { label = new URL(target.url).hostname.replace(/^www\./, '').split('.')[0] || label; } catch (_) {}
       const existingId = target.groupId || source.groupId || groupId;
       const color = target.groupColor || source.groupColor || colors[Math.abs(label.length) % colors.length];
-      return items.map(item => item.id === sourceId || item.id === targetId ? { ...item, groupId: existingId, groupLabel: target.groupLabel || source.groupLabel || label, groupColor: color } : item);
+      const grouped = items.map(item => item.id === sourceId || item.id === targetId ? { ...item, groupId: existingId, groupLabel: target.groupLabel || source.groupLabel || label, groupColor: color } : item);
+      const inGroup = grouped.filter(item => item.groupId === existingId);
+      const rest = grouped.filter(item => item.groupId !== existingId);
+      const insertAt = Math.min(items.findIndex(item => item.id === targetId), rest.length);
+      rest.splice(insertAt, 0, ...inGroup);
+      return rest;
     });
   }, []);
 
@@ -2242,32 +2262,16 @@ export default function App() {
     setTabs(items => items.map(item => ids.includes(item.id) ? { ...item, groupId, groupLabel: label, groupColor: color } : item));
   }, [relatedTabs]);
 
-  // Duplicate URLs are almost always intentional parallel work. Keep them
-  // together automatically so reopening a page does not leave scattered tabs.
-  useEffect(() => {
-    const duplicates = new Map();
-    tabs.forEach(item => { if (item.kind === 'web' && item.url && item.url !== 'about:blank') { const list = duplicates.get(item.url) || []; list.push(item); duplicates.set(item.url, list); } });
-    const groups = [...duplicates.values()].filter(list => list.length > 1 && list.some(item => !item.groupId));
-    if (!groups.length) return;
-    setTabs(items => {
-      let changed = false;
-      const next = items.map(item => {
-        const group = groups.find(list => list.some(candidate => candidate.id === item.id));
-        if (!group || item.groupId) return item;
-        changed = true;
-        let label = 'Duplicate tabs'; try { label = new URL(item.url).hostname.replace(/^www\./, '') || label; } catch (_) {}
-        return { ...item, groupId: `duplicate-${encodeURIComponent(group[0].url)}`, groupLabel: label, groupColor: '#14b8a6' };
-      });
-      return changed ? next : items;
-    });
-  }, [tabs]);
 
   const toggleSplitView = useCallback(() => {
     if (splitTabId) { setSplitTabId(null); return; }
-    const other = tabs.find(item => item.kind === 'web' && item.id !== activeId && item.url && item.url !== 'about:blank');
-    if (!other) { setOverlay({ kind: 'dialog', theme, title: 'Open another page first', message: 'Split view places two open websites side by side. Open a second website, then choose Split view again.' }); return; }
-    setSplitTabId(other.id);
-  }, [splitTabId, tabs, activeId, theme]);
+    setSplitChooserOpen(true);
+  }, [splitTabId]);
+  const chooseSplitTab = useCallback((id, side = 'right') => {
+    if (side === 'left') { setSplitTabId(activeId); setActiveId(id); }
+    else setSplitTabId(id);
+    setSplitChooserOpen(false);
+  }, [activeId]);
 
   const bookmark = useCallback(async () => {
     const t = tabRef.current;
@@ -2840,8 +2844,9 @@ export default function App() {
         />
       )}
       <View style={[s.content, { height: 'calc(100vh - ' + viewTop + 'px)' }]} ref={contentRef}>
+        {splitChooserOpen ? <SplitChooser tabs={tabs} activeId={activeId} onChoose={chooseSplitTab} onClose={() => setSplitChooserOpen(false)} theme={theme} /> : null}
         {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank' && !t.discarded).map(t => (
-          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} onActivate={() => { if (splitTabId && t.id === splitTabId && t.id !== activeId) { setSplitTabId(activeId); setActiveId(t.id); } }} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
+          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} sidePanelWidth={sidePanel.open ? (sidePanel.width || 420) + 52 : 0} onActivate={() => { if (splitTabId && t.id === splitTabId && t.id !== activeId) { setSplitTabId(activeId); setActiveId(t.id); } }} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
         ))}
         {isWeb ? (
           <>
@@ -2872,7 +2877,7 @@ export default function App() {
           </View>
         ))}
         {sidePanel.open ? <View style={{ position: 'absolute', top: 0, bottom: 0, right: 52, width: sidePanel.width || 420, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.panel }}>{sidePanel.mavis ? <MavisPanel account={account} webContentsId={activeWebview()?.getWebContentsId?.()} onSignIn={signIn} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} />}</View> : null}
-        <SideShortcutRail apps={[...DEFAULT_SITE_APPS, ...(Array.isArray(settings.siteApps) ? settings.siteApps : [])].filter((item, index, list) => list.findIndex(other => other.id === item.id) === index)} active={sidePanel} onOpen={openSiteApp} onClose={() => setSidePanel({ open: false, extId: null })} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} theme={theme} />
+        <SideShortcutRail apps={[...DEFAULT_SITE_APPS, ...(Array.isArray(settings.siteApps) ? settings.siteApps : [])].filter((item, index, list) => item.id !== 'mavis' && list.findIndex(other => other.id === item.id) === index)} active={sidePanel} onOpen={openSiteApp} onClose={() => setSidePanel({ open: false, extId: null })} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} theme={theme} />
         {activeDownload ? <TouchableOpacity onPress={() => openPage('downloads')} style={{ position: 'absolute', right: sidePanel.open ? 420 : 16, top: 14, zIndex: 60, width: 286, minHeight: 58, padding: 11, borderRadius: 15, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'f2', shadowColor: '#000', shadowOpacity: .24, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }} {...GLASS_HEAVY}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Download size={17} color={theme.accent} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }} numberOfLines={1}>{activeDownload.filename}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{activeDownload.state === 'paused' ? 'Paused' : `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 0}% · Open downloads`}</Text></View><ChevronRight size={15} color={theme.faint} /></View>
           <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden', marginTop: 9 }}><View style={{ height: '100%', width: `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 4}%`, backgroundColor: theme.accent }} /></View>
