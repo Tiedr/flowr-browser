@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image } from 'react-native';
 import Overlay from './Overlay';
 import {
-  Accessibility, AlertCircle, ArrowLeft, ArrowRight, Ban, Bookmark, CheckCircle, ChevronRight, Clock, Cloud, Copy, CreditCard, Cpu,
+  Accessibility, AlertCircle, ArrowLeft, ArrowRight, Ban, Bookmark, BookmarkPlus, CheckCircle, ChevronRight, Clock, Cloud, Copy, CreditCard, Cpu,
   Download, ExternalLink, Eye, EyeOff, Folder, FolderInput, FolderOpen, FolderPlus, Gauge, Github, Globe, History, Home, Info, KeyRound, Languages, LayoutGrid, Lock,
   LogIn, LogOut, Menu, Minus, MoreHorizontal, Palette, Pause, Pin, Play, Plus, Puzzle, RotateCcw, Search, Settings, SlidersHorizontal,
   Shield, ShieldCheck, Sparkles, Square, Star, Trash2, User, UserCheck, Wallet, FileText, X, Youtube, RefreshCw,
@@ -284,7 +284,16 @@ function StartMini({ title, action, onAction, rows, icon: Icon, empty, go, isLig
 
 // Flowr's new tab is deliberately not an app launcher or a dashboard. Site
 // apps live in the side panel; this surface stays quiet and browser-first.
-function FlowrStart({ go, open, bookmarks, account, theme }) {
+const RECOMMENDED_SHORTCUTS = [
+  { title: 'YouTube', url: 'https://www.youtube.com' },
+  { title: 'WhatsApp', url: 'https://web.whatsapp.com' },
+  { title: 'Spotify', url: 'https://open.spotify.com' },
+  { title: 'Tieddr Space', url: 'https://space.tieddr.com' },
+  { title: 'Flowr Store', url: 'https://flowr.tieddr.com/store' },
+  { title: 'Mavis', url: 'https://mavis.tieddr.com' }
+];
+
+function FlowrStart({ go, open, bookmarks, account, theme, topSites }) {
   const [query, setQuery] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [news, setNews] = useState({ loading: true, items: [] });
@@ -297,6 +306,7 @@ function FlowrStart({ go, open, bookmarks, account, theme }) {
   const firstName = account?.name?.split(' ')[0] || '';
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const submit = () => { if (query.trim()) { go(query); setQuery(''); } };
+  const shortcuts = topSites?.length >= 4 ? topSites : RECOMMENDED_SHORTCUTS;
   return <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', background: light ? 'linear-gradient(145deg,#f6f5ee 0%,#ecefe4 100%)' : 'linear-gradient(145deg,#111411 0%,#080a09 100%)' }]}>
     <View pointerEvents="none" style={{ position: 'absolute', width: 520, height: 520, borderRadius: 260, right: -160, top: -210, borderWidth: 80, borderColor: theme.accentSoft, opacity: .42, transform: [{ rotate: '-18deg' }] }} />
     <View pointerEvents="none" style={{ position: 'absolute', width: 320, height: 480, borderRadius: 180, right: 50, top: -190, backgroundColor: theme.accentSoft, opacity: .2, transform: [{ rotate: '38deg' }] }} />
@@ -306,7 +316,7 @@ function FlowrStart({ go, open, bookmarks, account, theme }) {
       <Text style={{ color: softInk, fontSize: 13, fontWeight: '700', letterSpacing: .5 }}>{greeting}{firstName ? `, ${firstName}` : ''}</Text>
       <Text style={{ color: ink, fontSize: 76, lineHeight: 88, fontWeight: '300', letterSpacing: -4.5, marginTop: 3 }}>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
       <View style={{ width: '100%', maxWidth: 720, height: 58, borderRadius: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, gap: 12, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOpacity: light ? .08 : .28, shadowRadius: 28, shadowOffset: { width: 0, height: 14 } }} {...GLASS_HEAVY}><Search size={19} color={softInk} /><TextInput value={query} onChangeText={setQuery} onSubmitEditing={submit} placeholder="Search or enter an address" placeholderTextColor={softInk} autoCapitalize="none" style={{ flex: 1, color: ink, fontSize: 15, outlineStyle: 'none' }} />{query ? <TouchableOpacity onPress={submit} style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}><ArrowRight size={16} color={theme.onAccent} /></TouchableOpacity> : null}</View>
-      {bookmarks.length ? <View style={{ width: '100%', maxWidth: 720, flexDirection: 'row', justifyContent: 'center', gap: 9, marginTop: 22 }}>{bookmarks.slice(0, 6).map(item => <TouchableOpacity key={item.url} onPress={() => go(item.url)} style={{ width: 100, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 14 }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><SiteIcon url={item.url} favicon={item.favicon} theme={theme} size={17} /></View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 7, width: '100%', textAlign: 'center' }}>{item.title || host(item.url)}</Text></TouchableOpacity>)}</View> : null}
+      <View style={{ width: '100%', maxWidth: 720, marginTop: 22 }}><Text style={{ color: softInk, fontSize: 9.5, fontWeight: '850', letterSpacing: 1.25, textAlign: 'center', marginBottom: 7 }}>{topSites?.length >= 4 ? 'FREQUENTLY USED' : 'RECOMMENDED'}</Text><View style={{ flexDirection: 'row', justifyContent: 'center', gap: 9 }}>{shortcuts.slice(0, 6).map(item => <TouchableOpacity key={item.url} onPress={() => go(item.url)} style={{ width: 100, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 14 }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><SiteIcon url={item.url} favicon={item.favicon} theme={theme} size={17} /></View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 7, width: '100%', textAlign: 'center' }}>{item.title || host(item.url)}</Text></TouchableOpacity>)}</View></View>
     </View>
     <View style={{ position: 'absolute', left: 32, right: 32, bottom: 24, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 16, zIndex: 3 }}><TouchableOpacity onPress={() => open('bookmarks')} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Star size={14} color={softInk} /><Text style={{ color: softInk, fontSize: 11.5, fontWeight: '700' }}>Bookmarks</Text></TouchableOpacity><View style={{ width: 1, height: 18, backgroundColor: theme.border }} />{news.items?.[0] ? <TouchableOpacity onPress={() => go(news.items[0].url)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 }}><Text style={{ color: theme.accent, fontSize: 9.5, fontWeight: '850', letterSpacing: 1 }}>TIEDDR NEWS</Text><Text numberOfLines={1} style={{ flex: 1, color: softInk, fontSize: 11.5 }}>{news.items[0].title}</Text></TouchableOpacity> : <View style={{ flex: 1 }} />}<Text style={{ color: theme.faint, fontSize: 10.5 }}>A quiet place to begin.</Text></View>
   </View>;
@@ -321,6 +331,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
   const suppress = useRef(false);
   const [peek, setPeek] = useState(null);
   const [peekImage, setPeekImage] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const peekTimer = useRef(null);
 
   useEffect(() => {
@@ -355,6 +366,10 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
         if (dragRef.current?.moved && targetId && targetId !== dragRef.current.id) onGroupTabs?.(dragRef.current.id, targetId);
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
+        if (dragRef.current?.moved && !targetId) {
+          const dragged = tabs.find(item => item.id === dragRef.current.id);
+          if (dragged?.url && dragged.url !== 'about:blank') ipc?.send('new-window', { incognito: false, url: dragged.url });
+        }
         if (dragRef.current?.moved) { suppress.current = true; setTimeout(() => (suppress.current = false), 0); }
         dragRef.current = null; setDrag(null);
       };
@@ -379,7 +394,13 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
             ) : null}
           </View>
       }<View ref={stripRef} style={s.tstrip}>
+        {Array.from(new Map(tabs.filter(tab => tab.groupId).map(tab => [tab.groupId, tab])).values()).map(group => {
+          const members = tabs.filter(tab => tab.groupId === group.groupId);
+          const collapsed = collapsedGroups.has(group.groupId);
+          return <TouchableOpacity key={`group-control-${group.groupId}`} dataSet={HOVER} title={collapsed ? `Expand ${group.groupLabel || 'group'}` : `Collapse ${group.groupLabel || 'group'}`} onPress={() => setCollapsedGroups(current => { const next = new Set(current); if (next.has(group.groupId)) next.delete(group.groupId); else next.add(group.groupId); return next; })} style={{ height: 30, minWidth: 42, maxWidth: 142, paddingHorizontal: 10, borderRadius: 10, marginRight: 4, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: collapsed ? (group.groupColor || theme.accent) : theme.soft, borderWidth: 1, borderColor: group.groupColor || theme.accent }}><ChevronRight size={12} color={collapsed ? theme.onAccent : (group.groupColor || theme.accent)} style={{ transform: [{ rotate: collapsed ? '0deg' : '90deg' }] }} /><Text numberOfLines={1} style={{ color: collapsed ? theme.onAccent : theme.text, fontSize: 10.5, fontWeight: '800', maxWidth: 78 }}>{group.groupLabel || 'Group'}</Text><View style={{ minWidth: 17, height: 17, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: collapsed ? 'rgba(0,0,0,.18)' : theme.border }}><Text style={{ color: collapsed ? theme.onAccent : theme.muted, fontSize: 9, fontWeight: '800' }}>{members.length}</Text></View></TouchableOpacity>;
+        })}
         {tabs.map(t => {
+          if (t.groupId && collapsedGroups.has(t.groupId)) return null;
           const a = t.id === active;
           const dragging = drag && drag.id === t.id;
           const page = t.kind !== 'web' ? PAGES[t.kind] : null;
@@ -522,9 +543,8 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, hom
         )}
       </View>
       <View style={[s.navDivider, { backgroundColor: theme.border }]} />
-      {isWeb && tab.url !== 'about:blank' ? <View style={{ position: 'relative' }}><I icon={LayoutGrid} label={tab.groupId ? 'Remove tab from group' : groupSuggestion?.length > 1 ? `Group ${groupSuggestion.length} related tabs` : 'Group this tab'} onPress={onGroup} solid={!!tab.groupId || groupSuggestion?.length > 1} theme={theme} />{!tab.groupId && groupSuggestion?.length > 1 ? <View style={{ position: 'absolute', right: -2, top: -3, minWidth: 14, height: 14, borderRadius: 7, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accent }}><Text style={{ fontSize: 8.5, fontWeight: '800', color: theme.onAccent }}>{groupSuggestion.length}</Text></View> : null}</View> : null}
-      {isWeb ? <I icon={PanelTopOpen} label={splitTabId ? 'Close split view' : 'Open split view'} onPress={onSplit} solid={!!splitTabId} theme={theme} /> : null}
-      {isWeb && tab.url !== 'about:blank' ? <I icon={Download} label={tab.pwa?.manifest ? 'Install this PWA in Flowr' : 'Add this site to Flowr apps'} onPress={onInstallApp} solid={!!tab.pwa?.manifest} theme={theme} /> : null}
+      {isWeb ? <I icon={Columns} label={splitTabId ? 'Cancel split view' : 'Split view'} onPress={onSplit} solid={!!splitTabId} theme={theme} /> : null}
+      {isWeb && tab.url !== 'about:blank' ? <I icon={tab.pwa?.manifest ? Download : BookmarkPlus} label={tab.pwa?.manifest ? 'Install this PWA in Flowr' : 'Save site to Flowr start page'} onPress={onInstallApp} solid={!!tab.pwa?.manifest} theme={theme} /> : null}
       <I icon={Star} label="Bookmark" onPress={bookmark} solid={bookmarked} theme={theme} />
       {updateStatus?.available ? <View style={{ position: 'relative' }}>
         <I icon={ArrowUpCircle} label={updateStatus.phase === 'downloaded' ? 'Install Flowr update' : `Update to Flowr ${updateStatus.latestVersion || ''}`} onPress={onUpdate} solid theme={theme} />
@@ -905,7 +925,7 @@ function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onD
   const CurrentIcon = current.icon;
   const last = step === steps.length - 1;
   return <View dataSet={{ welcome: '1' }} style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.bg, overflow: 'hidden' }}>
-    <View style={{ width: '57%', paddingHorizontal: 62, paddingVertical: 48, justifyContent: 'space-between', position: 'relative', background: `radial-gradient(circle at 16% 4%, ${theme.accentSoft}, transparent 28%), linear-gradient(155deg, ${theme.chrome}, ${theme.bg})` }}>
+    <View style={{ width: '57%', paddingHorizontal: 62, paddingVertical: 48, justifyContent: 'space-between', position: 'relative', background: START_BGS.find(item => item.id === 'flowr-abstract')?.css || `linear-gradient(155deg, ${theme.chrome}, ${theme.bg})` }}>
       <View dataSet={{ welcomeorb: 'a' }} style={{ position: 'absolute', width: 460, height: 460, borderRadius: 230, left: -180, bottom: -190, backgroundColor: theme.accentSoft, opacity: .72 }} />
       <View dataSet={{ welcomeorb: 'b' }} style={{ position: 'absolute', width: 300, height: 300, borderRadius: 150, right: -80, top: 50, backgroundColor: theme.accent, opacity: .1 }} />
       <View dataSet={{ welcomegrid: '1' }} style={{ position: 'absolute', inset: 0, opacity: .15, backgroundImage: `linear-gradient(${theme.border} 1px, transparent 1px), linear-gradient(90deg, ${theme.border} 1px, transparent 1px)`, backgroundSize: '42px 42px' }} />
@@ -1666,8 +1686,9 @@ function rectOf(el) {
   catch (_) { return { left: 0, top: 0 }; }
 }
 
-const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
+const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', sidePanelWidth = 0, onActivate, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
   const hostRef = useRef(null);
+  const activateRef = useRef(onActivate); activateRef.current = onActivate;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1771,7 +1792,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     // Google and YouTube continuously navigate hidden sodar/gapi frames. Never
     // promote those subframe URLs into Flowr's address bar or active tab.
     const onStartNav = (e) => { if (e?.isMainFrame === false) return; const u = resolveUrl(e?.url || '', ''); if (u) { h().clearNavError(tab.id); h().updateUrl(tab.id, u); } };
-    const onTitle = (e, title) => { if (title) h().updateTitle(tab.id, title); };
+    const onTitle = (e, title) => { if (title) { h().updateTitle(tab.id, title); const currentUrl = resolveUrl(wv.getURL?.() || '', ''); if (currentUrl) h().addHistory(currentUrl, title); } };
     const onFavicon = (e, favicons) => { if (favicons && favicons[0]) h().updateFavicon(tab.id, favicons[0]); };
     const onStartLoad = () => h().updateLoading(tab.id, true);
     const onStopLoad = () => {
@@ -1787,10 +1808,16 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       } catch (_) {}
     };
     const onFound = (e, result) => h().findResult(result);
-    const onFail = (e, errorCode, errorDescription, validatedURL) => {
-      if (e?.isMainFrame === false) return;
-      if (!validatedURL || validatedURL === 'about:blank' || errorCode === -3 || errorCode === -2) return;
-      h().navError(tab.id, validatedURL, errorDescription);
+    const onFail = (event, legacyCode, legacyDescription, legacyUrl) => {
+      const errorCode = event?.errorCode ?? legacyCode;
+      const errorDescription = event?.errorDescription || legacyDescription;
+      const validatedURL = event?.validatedURL || event?.url || legacyUrl || resolveUrl('', '');
+      if (event?.isMainFrame === false) return;
+      // ERR_ABORTED is expected when the user stops or replaces a navigation.
+      // All real main-frame failures, including DNS, offline, TLS and refused
+      // connections, must replace the broken guest surface with Flowr's page.
+      if (!validatedURL || validatedURL === 'about:blank' || errorCode === -3) return;
+      h().navError(tab.id, validatedURL, errorDescription || `Navigation failed (${errorCode})`, errorCode);
     };
     const onNewWin = async (e, url) => {
       e.preventDefault();
@@ -1819,6 +1846,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     wv.addEventListener('did-stop-loading', onStopLoad);
     wv.addEventListener('found-in-page', onFound);
     wv.addEventListener('did-fail-load', onFail);
+    wv.addEventListener('did-fail-provisional-load', onFail);
     wv.addEventListener('new-window', onNewWin);
     wv.addEventListener('dom-ready', onDomReady);
 
@@ -1833,6 +1861,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       wv.removeEventListener('did-stop-loading', onStopLoad);
       wv.removeEventListener('found-in-page', onFound);
       wv.removeEventListener('did-fail-load', onFail);
+      wv.removeEventListener('did-fail-provisional-load', onFail);
       wv.removeEventListener('new-window', onNewWin);
       wv.removeEventListener('dom-ready', onDomReady);
       try { webviewsRef.current.delete(tab.id); } catch (_) {}
@@ -1847,6 +1876,14 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       try { if (wv?.getWebContentsId) ipc?.send('set-webview-active', wv.getWebContentsId(), active); } catch (_) {}
     }
   }, [active]);
+
+  useEffect(() => {
+    const wv = hostRef.current?.firstChild;
+    if (!wv) return undefined;
+    const focused = () => activateRef.current?.();
+    wv.addEventListener('focus', focused);
+    return () => wv.removeEventListener('focus', focused);
+  }, [tab.id]);
 
   const prevUrlRef = useRef(tab.url);
   useEffect(() => {
@@ -1865,8 +1902,8 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     if (wv && preloadUrl) wv.setAttribute('preload', preloadUrl);
   }, [preloadUrl]);
 
-  const splitStyle = layout === 'left' ? { left: 0, right: '50%', width: '50%' } : layout === 'right' ? { left: '50%', right: 0, width: '50%', borderLeft: '1px solid rgba(128,128,128,.28)' } : { left: 0, right: 0, width: '100%' };
-  return <div ref={hostRef} style={{ position: 'absolute', top: 0, bottom: 0, ...splitStyle, height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
+  const splitStyle = layout === 'left' ? { left: 0, right: '50%', width: '50%' } : layout === 'right' ? { left: '50%', right: sidePanelWidth, width: `calc(50% - ${sidePanelWidth / 2}px)`, borderLeft: '1px solid rgba(128,128,128,.28)' } : { left: 0, right: sidePanelWidth, width: `calc(100% - ${sidePanelWidth}px)` };
+  return <div ref={hostRef} onMouseDown={onActivate} style={{ position: 'absolute', top: 0, bottom: 0, ...splitStyle, height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none', boxShadow: layout === 'right' ? '-1px 0 0 rgba(128,128,128,.35)' : 'none' }} />;
 });
 
 function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme }) {
@@ -1879,9 +1916,11 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme
     wv.setAttribute('preload', preloadUrl);
     wv.setAttribute('partition', info.incognito ? 'flow-incognito' : 'persist:flow-main');
     wv.setAttribute('webpreferences', 'contextIsolation=yes sandbox=no');
+    wv.setAttribute('allowpopups', 'true');
     wv.style.position = 'absolute'; wv.style.top = '42px'; wv.style.left = '0'; wv.style.right = '0'; wv.style.bottom = '0';
     wv.style.width = '100%'; wv.style.height = 'calc(100% - 42px)'; wv.style.border = 'none'; wv.style.background = '#ffffff';
     host.appendChild(wv);
+    wv.addEventListener('dom-ready', () => { try { ipc?.send('register-webview', wv.getWebContentsId()); } catch (_) {} });
     return () => { if (wv.parentNode) wv.parentNode.removeChild(wv); };
   }, [info.extId, info.url, preloadUrl, info.incognito]);
   return <View ref={ref} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: info.width || 400, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme?.border || 'rgba(255,255,255,0.12)', backgroundColor: theme?.panel || '#111' }}>
@@ -1889,6 +1928,30 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{info.icon ? <Image source={{ uri: info.icon }} style={{ width: 18, height: 18, borderRadius: 4 }} /> : <Sparkles size={16} color={theme?.accent} />}<Text style={{ color: theme?.text, fontWeight: '700' }}>{info.name || (info.mavis ? 'Mavis' : 'Side panel')}</Text></View>
       <View style={{ flexDirection: 'row' }}><I icon={ExternalLink} label="Open in tab" onPress={() => { onOpenTab?.(info.url); onClose(); }} theme={theme} /><I icon={X} label="Close sidebar" onPress={onClose} theme={theme} /></View>
     </View>
+  </View>;
+}
+
+function SideShortcutRail({ apps, active, onOpen, onClose, onMavis, theme }) {
+  const items = (apps?.length ? apps : DEFAULT_SITE_APPS).slice(0, 9);
+  return <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 52, zIndex: 8, alignItems: 'center', paddingTop: 10, gap: 7, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.chrome + 'f2' }} {...GLASS_HEAVY}>
+    {items.map(item => {
+      const selected = active?.open && active.extId === `site-app:${item.id || host(item.url)}`;
+      return <TouchableOpacity key={item.id || item.url} dataSet={HOVER} accessibilityLabel={item.name || host(item.url)} onPress={() => selected ? onClose() : onOpen(item)} style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.accentSoft : 'transparent', borderWidth: selected ? 1 : 0, borderColor: theme.accent }}>
+        {item.icon ? <Image source={{ uri: item.icon }} style={{ width: 22, height: 22, borderRadius: 6 }} /> : <SiteIcon url={item.url} theme={theme} size={20} />}
+      </TouchableOpacity>;
+    })}
+    <View style={{ flex: 1 }} />
+    <TouchableOpacity accessibilityLabel="Open Mavis" onPress={onMavis} style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 10, backgroundColor: active?.mavis ? theme.accentSoft : 'transparent' }}><Sparkles size={19} color={theme.accent} /></TouchableOpacity>
+  </View>;
+}
+
+function SplitChooser({ tabs, activeId, onChoose, onClose, theme }) {
+  const choices = tabs.filter(item => item.kind === 'web' && item.id !== activeId && item.url && item.url !== 'about:blank');
+  return <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '50%', zIndex: 7, backgroundColor: theme.chrome, borderLeftWidth: 1, borderLeftColor: theme.border, padding: 26 }} {...GLASS_HEAVY}>
+    <TouchableOpacity onPress={onClose} style={{ alignSelf: 'flex-end', padding: 7 }}><X size={18} color={theme.muted} /></TouchableOpacity>
+    <Text style={{ color: theme.text, fontSize: 16, fontWeight: '750', textAlign: 'center', marginTop: 34 }}>Choose a tab to add to split view</Text>
+    <ScrollView style={{ marginTop: 22 }} contentContainerStyle={{ gap: 8 }}>{choices.map(item => <TouchableOpacity key={item.id} onPress={() => onChoose(item.id, 'right')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: theme.soft, borderWidth: 1, borderColor: theme.border }}><View style={{ width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.panel }}>{item.favicon ? <Image source={{ uri: item.favicon }} style={{ width: 22, height: 22, borderRadius: 5 }} /> : <Globe size={20} color={theme.accent} />}</View><View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 12.5, fontWeight: '650' }}>{item.title || host(item.url)}</Text><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{host(item.url)}</Text></View></TouchableOpacity>)}</ScrollView>
+    {!choices.length ? <Text style={{ color: theme.muted, fontSize: 12.5, textAlign: 'center', marginTop: 22 }}>Open another website first, then choose Split view.</Text> : null}
   </View>;
 }
 
@@ -1954,6 +2017,7 @@ export default function App() {
   const [settings, setSettings] = useState({ theme: 'flow', searchEngine: 'google', blockTrackers: true, defaultZoom: 1, accentColor: '', startBackground: 'none' });
   const [bookmarks, setBookmarks] = useState([]);
   const [history, setHistory] = useState([]);
+  const [topSites, setTopSites] = useState([]);
   const [downloads, setDownloads] = useState([]);
   const [profiles, setProfiles] = useState([{ id: 'default', name: 'Default' }]);
   const [activeProfile, setActiveProfile] = useState('default');
@@ -1976,6 +2040,7 @@ export default function App() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [splitTabId, setSplitTabId] = useState(null);
+  const [splitChooserOpen, setSplitChooserOpen] = useState(false);
   const urlRef = useRef(null);
   const extActsRef = useRef(extActs); extActsRef.current = extActs;
   const pendingPwRef = useRef(null);
@@ -2027,6 +2092,8 @@ export default function App() {
   }, [settings.siteApps]);
   const relatedTabs = useMemo(() => {
     if (!isWeb || !tab.url || tab.url === 'about:blank') return [];
+    const exact = tabs.filter(item => item.kind === 'web' && item.url === tab.url).map(item => item.id);
+    if (exact.length > 1) return exact;
     let key = ''; try { const parts = new URL(tab.url).hostname.replace(/^www\./, '').split('.'); key = parts.slice(-2).join('.'); } catch (_) {}
     return tabs.filter(item => item.kind === 'web' && item.url && item.url !== 'about:blank' && (() => { try { const parts = new URL(item.url).hostname.replace(/^www\./, '').split('.'); return parts.slice(-2).join('.') === key; } catch (_) { return false; } })()).map(item => item.id);
   }, [tabs, tab.id, tab.url, isWeb]);
@@ -2056,9 +2123,9 @@ export default function App() {
   }, [activeId, isWeb, splitTabId, tabs]);
 
   useEffect(() => {
-    if (settings.memorySaver === false) return undefined;
+    if (settings.memorySaver !== true) return undefined;
     const sweep = () => {
-      const cutoff = Date.now() - Math.max(5, Number(settings.inactiveTabTimeout) || 10) * 60 * 1000;
+      const cutoff = Date.now() - Math.max(30, Number(settings.inactiveTabTimeout) || 30) * 60 * 1000;
       setTabs(current => current.map(t => (
         t.kind === 'web' && t.id !== activeIdRef.current && t.url && t.url !== 'about:blank' &&
         !t.loading && !t.discarded && (t.lastActiveAt || 0) < cutoff
@@ -2073,17 +2140,22 @@ export default function App() {
 
   const load = useCallback(async () => {
     if (!ipc) return;
-    const [r, b, h, d, p, a, e, f, n, nf] = await Promise.all([
+    const [r, b, h, d, p, a, e, f, n, nf, ts] = await Promise.all([
       ipc.invoke('get-settings'), ipc.invoke('get-bookmarks'), ipc.invoke('get-history'),
       ipc.invoke('get-downloads'), ipc.invoke('get-profiles'), ipc.invoke('get-active-profile'),
       ipc.invoke('get-extensions'), ipc.invoke('get-bookmark-folders'),
-      ipc.invoke('get-notes'), ipc.invoke('get-note-folders')
+      ipc.invoke('get-notes'), ipc.invoke('get-note-folders'), ipc.invoke('get-top-sites')
     ]);
     setSettings(v => ({ ...v, ...r }));
     setBookmarks(b || []); setHistory(h || []); setDownloads(d || []);
+    setTopSites(ts || []);
     setProfiles(p || []); setActiveProfile(a || 'default'); setExtensions(e || []); setFolders(f || []);
     setNotes(n || []); setNoteFolders(nf || []);
     if (r?.onboardingCompleted !== true || r?.lastSeenVersion !== APP_VERSION) {
+      if (r?.onboardingCompleted === true && r?.lastSeenVersion !== APP_VERSION) {
+        const markedSeen = await ipc.invoke('update-settings', { lastSeenVersion: APP_VERSION });
+        setSettings(v => ({ ...v, ...(markedSeen || {}), lastSeenVersion: APP_VERSION }));
+      }
       const id = nextId();
       setTabs(current => current.some(item => item.kind === 'welcome') ? current : current.concat({ id, kind: 'welcome', title: r?.onboardingCompleted === true ? `What's new` : 'Welcome', url: 'flow://welcome' }));
       setActiveId(current => current === 1 ? id : current);
@@ -2168,7 +2240,12 @@ export default function App() {
       let label = 'Tab group'; try { label = new URL(target.url).hostname.replace(/^www\./, '').split('.')[0] || label; } catch (_) {}
       const existingId = target.groupId || source.groupId || groupId;
       const color = target.groupColor || source.groupColor || colors[Math.abs(label.length) % colors.length];
-      return items.map(item => item.id === sourceId || item.id === targetId ? { ...item, groupId: existingId, groupLabel: target.groupLabel || source.groupLabel || label, groupColor: color } : item);
+      const grouped = items.map(item => item.id === sourceId || item.id === targetId ? { ...item, groupId: existingId, groupLabel: target.groupLabel || source.groupLabel || label, groupColor: color } : item);
+      const inGroup = grouped.filter(item => item.groupId === existingId);
+      const rest = grouped.filter(item => item.groupId !== existingId);
+      const insertAt = Math.min(items.findIndex(item => item.id === targetId), rest.length);
+      rest.splice(insertAt, 0, ...inGroup);
+      return rest;
     });
   }, []);
 
@@ -2187,12 +2264,16 @@ export default function App() {
     setTabs(items => items.map(item => ids.includes(item.id) ? { ...item, groupId, groupLabel: label, groupColor: color } : item));
   }, [relatedTabs]);
 
+
   const toggleSplitView = useCallback(() => {
     if (splitTabId) { setSplitTabId(null); return; }
-    const other = tabs.find(item => item.kind === 'web' && item.id !== activeId && item.url && item.url !== 'about:blank');
-    if (!other) { setOverlay({ kind: 'dialog', theme, title: 'Open another page first', message: 'Split view places two open websites side by side. Open a second website, then choose Split view again.' }); return; }
-    setSplitTabId(other.id);
-  }, [splitTabId, tabs, activeId, theme]);
+    setSplitChooserOpen(true);
+  }, [splitTabId]);
+  const chooseSplitTab = useCallback((id, side = 'right') => {
+    if (side === 'left') { setSplitTabId(activeId); setActiveId(id); }
+    else setSplitTabId(id);
+    setSplitChooserOpen(false);
+  }, [activeId]);
 
   const bookmark = useCallback(async () => {
     const t = tabRef.current;
@@ -2371,6 +2452,8 @@ export default function App() {
       { type: 'sep' },
       { label: 'Reload', icon: 'RotateCcw', disabled: target.kind !== 'web', action: { tab: 'reload', id: target.id } },
       { label: 'Duplicate', icon: 'Copy', disabled: target.kind !== 'web', action: { tab: 'duplicate', id: target.id } },
+      { label: 'Split tab to the left', icon: 'PanelLeft', disabled: target.kind !== 'web', action: { tab: 'split-left', id: target.id } },
+      { label: 'Split tab to the right', icon: 'PanelRight', disabled: target.kind !== 'web', action: { tab: 'split-right', id: target.id } },
       { label: target.pinned ? 'Unpin' : 'Pin', icon: 'Pin', action: { tab: 'pin', id: target.id } },
       { label: target.muted ? 'Unmute site' : 'Mute site', icon: 'Volume2', disabled: target.kind !== 'web', action: { tab: 'mute', id: target.id } },
       { type: 'sep' },
@@ -2388,13 +2471,14 @@ export default function App() {
     const items = [];
     const sep = () => items.push({ type: 'sep' });
     if (p.isEditable) {
-      items.push({ label: 'Undo', icon: 'Undo2', disabled: !p.editFlags?.canUndo, action: { cmd: 'undo' } });
-      items.push({ label: 'Redo', icon: 'Redo2', disabled: !p.editFlags?.canRedo, action: { cmd: 'redo' } });
+      items.push({ label: 'Undo', icon: 'Undo2', disabled: !p.editFlags?.canUndo, action: { uiCmd: 'undo' } });
+      items.push({ label: 'Redo', icon: 'Redo2', disabled: !p.editFlags?.canRedo, action: { uiCmd: 'redo' } });
       sep();
-      items.push({ label: 'Cut', icon: 'Scissors', disabled: !p.editFlags?.canCut, action: { cmd: 'cut' } });
-      items.push({ label: 'Copy', icon: 'Copy', disabled: !p.editFlags?.canCopy, action: { cmd: 'copy' } });
-      items.push({ label: 'Paste', icon: 'ClipboardPaste', disabled: !p.editFlags?.canPaste, action: { cmd: 'paste' } });
-      items.push({ label: 'Select all', icon: 'TextCursorInput', action: { cmd: 'selectAll' } });
+      items.push({ label: 'Cut', icon: 'Scissors', disabled: !p.editFlags?.canCut, action: { uiCmd: 'cut' } });
+      items.push({ label: 'Copy', icon: 'Copy', disabled: !p.editFlags?.canCopy, action: { uiCmd: 'copy' } });
+      items.push({ label: 'Paste', icon: 'ClipboardPaste', disabled: !p.editFlags?.canPaste, action: { uiCmd: 'paste' } });
+      if (p.ui) items.push({ label: 'Paste and go', icon: 'ArrowRight', action: { pasteAndGo: true } });
+      items.push({ label: 'Select all', icon: 'TextCursorInput', action: { uiCmd: 'selectAll' } });
     } else {
       if (p.linkURL) { items.push({ label: 'Open link in new tab', icon: 'ExternalLink', action: { open: p.linkURL } }); items.push({ label: 'Copy link address', icon: 'Copy', action: { cmd: 'copyText', arg: p.linkURL } }); sep(); }
       if (p.mediaType === 'image' && p.srcURL) { items.push({ label: 'Open image in new tab', icon: 'Image', action: { open: p.srcURL } }); items.push({ label: 'Save image as…', icon: 'Download', action: { cmd: 'saveImage', arg: p.srcURL } }); items.push({ label: 'Copy image', icon: 'Copy', action: { cmd: 'copyImage', arg: { x: p.x, y: p.y } } }); sep(); }
@@ -2437,7 +2521,14 @@ export default function App() {
   // Execute an action reported back from the overlay window.
   const runAction = useCallback((a) => {
     if (!a) return;
-    if (a.menu) {
+    if (a.uiCmd) {
+      const el = document.activeElement;
+      if (a.uiCmd === 'copy' || a.uiCmd === 'cut' || a.uiCmd === 'selectAll' || a.uiCmd === 'undo' || a.uiCmd === 'redo') {
+        try { document.execCommand(a.uiCmd === 'selectAll' ? 'selectAll' : a.uiCmd); } catch (_) {}
+      } else if (a.uiCmd === 'paste') {
+        navigator.clipboard?.readText?.().then(text => { if (!el || typeof text !== 'string') return; if (typeof el.setRangeText === 'function') { el.setRangeText(text); el.dispatchEvent(new Event('input', { bubbles: true })); } else document.execCommand('insertText', false, text); }).catch(() => {});
+      }
+    } else if (a.menu) {
       switch (a.menu) {
         case 'new-tab': openWebTab(); break;
         case 'new-window': ipc?.send('new-window', { incognito: false }); break;
@@ -2468,19 +2559,25 @@ export default function App() {
       else if (a.tab === 'close-right') { const index = tabs.findIndex(item => item.id === a.id); tabs.slice(index + 1).forEach(item => closeTab(item.id)); }
       else if (a.tab === 'duplicate') openWebTab(target.url);
       else if (a.tab === 'reload') { setActiveId(a.id); setTimeout(() => { try { webviewsRef.current.get(a.id)?.reload(); } catch (_) {} }, 0); }
-      else if (a.tab === 'split') { setActiveId(a.id); const other = tabs.find(item => item.kind === 'web' && item.id !== a.id); if (other) setSplitTabId(other.id); }
+      else if (a.tab === 'split' || a.tab === 'split-left' || a.tab === 'split-right') {
+        const target = tabs.find(item => item.id === a.id);
+        const other = tabs.find(item => item.kind === 'web' && item.id !== a.id && item.url && item.url !== 'about:blank');
+        if (target && other) { setActiveId(a.tab === 'split-left' ? other.id : target.id); setSplitTabId(a.tab === 'split-left' ? target.id : other.id); }
+      }
       else if (a.tab === 'group') { if (target.groupId) setTabs(items => items.map(item => item.id === a.id ? { ...item, groupId: null, groupLabel: '', groupColor: '' } : item)); else groupDroppedTabs(a.id, a.id === activeIdRef.current ? (tabs.find(item => item.id !== a.id)?.id || a.id) : activeIdRef.current); }
       else if (a.tab === 'pin') setTabs(items => { const next = items.map(item => item.id === a.id ? { ...item, pinned: !item.pinned } : item); return [...next.filter(item => item.pinned), ...next.filter(item => !item.pinned)]; });
       else if (a.tab === 'mute') { const wv = webviewsRef.current.get(a.id); const id = wv?.getWebContentsId?.(); if (id) ipc?.send('view-command', id, 'mute'); setTabs(items => items.map(item => item.id === a.id ? { ...item, muted: !item.muted } : item)); }
       else if (a.tab === 'new-right') { const id = openWebTab(); setTabs(items => { const from = items.findIndex(item => item.id === id); const at = items.findIndex(item => item.id === a.id); if (from < 0 || at < 0) return items; const next = items.slice(); const [created] = next.splice(from, 1); next.splice(at + 1, 0, created); return next; }); }
     }
     else if (a.open) openWebTab(a.open);
+    else if (a.pasteAndGo) ipc?.invoke('get-clipboard-text').then(text => { if (text?.trim()) go(text.trim()); });
     else if (a.search) openWebTab(urlOf(a.search, settingsRef.current));
     else if (a.ext) ipc?.send('open-extension-popup', a.ext);
     else if (a.sidePanel) setSidePanel({ open: true, extId: a.sidePanel.extId, url: a.sidePanel.url, width: 400, incognito });
     else if (a.sidePanelClose) setSidePanel({ open: false, extId: null, url: null });
     else if (a.dialog === 'clear-data') ipc.invoke('clear-browsing-data').then(load);
     else if (a.dialog === 'reset') ipc.invoke('reset-settings').then(d => setSettings(v => ({ ...v, ...d })));
+    else if (a.dialog === 'import-browser-data') importBrowserData();
     else if (a.dialog === 'pw-save') { const p = pendingPwRef.current; if (p) ipc.invoke('pw-save', p).then(x => setPasswords(x || [])); }
     else if (a.kind === 'dd-click') { ddCooldownRef.current = true; setTimeout(() => { ddCooldownRef.current = false; }, 600); go(a.url); }
     else if (a.kind === 'dd-ext-click') { const ext = extActsRef.current.find(e => e.id === a.id); if (ext) clickExt(ext); }
@@ -2526,7 +2623,7 @@ export default function App() {
       } else showDialog({ title: 'Extension could not be installed', message: result?.error || 'The extension package is invalid.' });
     },
     clearNavError: (id) => setTabs(items => items.map(item => item.id === id && item.error ? { ...item, error: null } : item)),
-    navError: (id, url, msg) => setTabs(items => items.map(item => item.id === id ? { ...item, loading: false, error: { url, message: msg || 'The page could not be reached.' } } : item))
+    navError: (id, url, msg, code) => setTabs(items => items.map(item => item.id === id ? { ...item, loading: false, error: { url, message: msg || 'The page could not be reached.', code } } : item))
   };
   useEffect(() => { handlersRef.current = handlers; });
 
@@ -2540,8 +2637,9 @@ export default function App() {
     load();
     ipc.invoke('get-view-preload').then(url => setPreloadUrl(url || '')).catch(() => setPreloadUrl(''));
     listen('request-new-tab', u => openWebTab(u));
+    listen('open-start-url', u => { if (u) openWebTab(u); });
     listen('downloads-changed', x => setDownloads(x || []));
-    listen('history-changed', x => setHistory(x || []));
+    listen('history-changed', x => { setHistory(x || []); ipc.invoke('get-top-sites').then(sites => setTopSites(sites || [])); });
     // Pushed by a background Tieddr Space sync (on sign-in, on startup if
     // already signed in, and every ~15 min) — not tied to a user action, so
     // it needs its own listener rather than piggybacking on load()'s explicit
@@ -2559,7 +2657,7 @@ export default function App() {
     listen('side-panel-opened', info => setSidePanel({ open: true, extId: info?.extId || null, url: info?.url || null, width: info?.width || 400, incognito: !!info?.incognito }));
     listen('side-panel-closed', () => setSidePanel({ open: false, extId: null, url: null }));
     listen('memory-pressure', () => setTabs(current => current.map(t => (
-      t.kind === 'web' && t.id !== activeIdRef.current && t.url && t.url !== 'about:blank' && !t.loading
+      t.kind === 'web' && t.id !== activeIdRef.current && t.id !== splitTabId && t.url && t.url !== 'about:blank' && !t.loading && (Date.now() - (t.lastActiveAt || 0)) > 30 * 60 * 1000
         ? { ...t, discarded: true }
         : t
     ))));
@@ -2614,7 +2712,20 @@ export default function App() {
   const rmBookmark = async u => setBookmarks(await ipc.invoke('remove-bookmark', u));
   const moveBookmark = async (u, folder) => setBookmarks(await ipc.invoke('move-bookmark', u, folder));
   const createBookmarkFolder = async name => setFolders(await ipc.invoke('create-bookmark-folder', name));
-  const signIn = async () => { const a = await ipc.invoke('tieddr-sign-in'); setAccount(a || null); const v = await ipc.invoke('vault-state'); setVaultState(v || { linked: false, unlocked: false, hasVault: false }); };
+  const signIn = async () => {
+    const a = await ipc.invoke('tieddr-sign-in');
+    setAccount(a || null);
+    const v = await ipc.invoke('vault-state');
+    setVaultState(v || { linked: false, unlocked: false, hasVault: false });
+    if (!a) return;
+    const imported = await ipc.invoke('import-installed-browser-bookmarks');
+    if (imported?.ok) setBookmarks(await ipc.invoke('get-bookmarks') || []);
+    showDialog({
+      title: imported?.imported ? 'Your bookmarks are ready' : 'Bring your browser data to Flowr',
+      message: `${imported?.imported ? `${imported.imported} bookmarks were imported automatically from ${imported.sources.join(', ')}. ` : ''}Browsers protect saved passwords from silent access. Unlock Tieddr Vault, then choose your browser password export to encrypt and sync it safely.`,
+      actions: [{ label: 'Later', action: null }, { label: 'Import passwords', primary: true, action: { dialog: 'import-browser-data' } }]
+    });
+  };
   const signOut = async () => { setAccount(await ipc.invoke('tieddr-sign-out')); await ipc.invoke('vault-lock'); setVaultState({ linked: false, unlocked: false, hasVault: false }); setVaultItems([]); };
   const revealPw = (o, u) => ipc.invoke('pw-reveal', o, u);
   const copyPw = (o, u) => ipc.invoke('pw-copy', o, u);
@@ -2742,14 +2853,15 @@ export default function App() {
         />
       )}
       <View style={[s.content, { height: 'calc(100vh - ' + viewTop + 'px)' }]} ref={contentRef}>
+        {splitChooserOpen ? <SplitChooser tabs={tabs} activeId={activeId} onChoose={chooseSplitTab} onClose={() => setSplitChooserOpen(false)} theme={theme} /> : null}
         {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank' && !t.discarded).map(t => (
-          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
+          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} sidePanelWidth={sidePanel.open ? (sidePanel.width || 420) + 52 : 0} onActivate={() => { if (splitTabId && t.id === splitTabId && t.id !== activeId) { setSplitTabId(activeId); setActiveId(t.id); } }} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
         ))}
         {isWeb ? (
           <>
             {isStart ? (
               <View style={[s.startLayer, { backgroundColor: theme.bg }]}>
-                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} />
+                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} topSites={topSites} />
               </View>
             ) : (
               <View style={s.topBar}>
@@ -2759,10 +2871,10 @@ export default function App() {
             )}
             {tab.error ? <View style={[StyleSheet.absoluteFill, { zIndex: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg, padding: 40 }]}>
               <View style={{ width: 76, height: 76, borderRadius: 26, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Shield size={34} color={theme.accent} /></View>
-              <Text style={{ color: theme.text, fontSize: 27, fontWeight: '780', letterSpacing: -.8, marginTop: 22 }}>This page could not be reached</Text>
-              <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, textAlign: 'center', maxWidth: 520, marginTop: 10 }}>{host(tab.error.url) || 'The website'} did not respond. Check your connection, firewall, or the address and try again.{tab.error.message ? `\n${tab.error.message}` : ''}</Text>
+              <Text style={{ color: theme.text, fontSize: 27, fontWeight: '780', letterSpacing: -.8, marginTop: 22 }}>{tab.error.code <= -200 && tab.error.code >= -299 ? 'Your connection is not secure' : tab.error.code === -106 ? 'You are offline' : 'This page could not be reached'}</Text>
+              <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, textAlign: 'center', maxWidth: 520, marginTop: 10 }}>{tab.error.code <= -200 && tab.error.code >= -299 ? `Flowr could not verify the security certificate presented by ${host(tab.error.url) || 'this website'}. The page was stopped to protect your information.` : `${host(tab.error.url) || 'The website'} did not respond. Check your connection, firewall, or the address and try again.`}{tab.error.message ? `\n${tab.error.message}` : ''}</Text>
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}><TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={() => { handlers.clearNavError(tab.id); reload(); }}><RefreshCw size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Try again</Text></TouchableOpacity><TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={() => go('about:blank')}><Home size={16} color={theme.text} /><Text style={[s.actionText, { color: theme.text }]}>New tab</Text></TouchableOpacity></View>
-              <Text style={{ color: theme.faint, fontSize: 11, marginTop: 18 }}>FLOWR_NETWORK_ERROR</Text>
+              <Text style={{ color: theme.faint, fontSize: 11, marginTop: 18 }}>{tab.error.code <= -200 && tab.error.code >= -299 ? 'FLOWR_CERTIFICATE_ERROR' : `FLOWR_NETWORK_ERROR${tab.error.code ? ` · ${tab.error.code}` : ''}`}</Text>
             </View> : null}
           </>
         ) : null}
@@ -2773,7 +2885,8 @@ export default function App() {
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}
-        {sidePanel.open ? <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: sidePanel.width || 420, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.panel }}>{sidePanel.mavis ? <MavisPanel account={account} webContentsId={activeWebview()?.getWebContentsId?.()} onSignIn={signIn} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} />}</View> : null}
+        {sidePanel.open ? <View style={{ position: 'absolute', top: 0, bottom: 0, right: 52, width: sidePanel.width || 420, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.panel }}>{sidePanel.mavis ? <MavisPanel account={account} webContentsId={activeWebview()?.getWebContentsId?.()} onSignIn={signIn} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} />}</View> : null}
+        <SideShortcutRail apps={[...DEFAULT_SITE_APPS, ...(Array.isArray(settings.siteApps) ? settings.siteApps : [])].filter((item, index, list) => item.id !== 'mavis' && list.findIndex(other => other.id === item.id) === index)} active={sidePanel} onOpen={openSiteApp} onClose={() => setSidePanel({ open: false, extId: null })} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} theme={theme} />
         {activeDownload ? <TouchableOpacity onPress={() => openPage('downloads')} style={{ position: 'absolute', right: sidePanel.open ? 420 : 16, top: 14, zIndex: 60, width: 286, minHeight: 58, padding: 11, borderRadius: 15, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'f2', shadowColor: '#000', shadowOpacity: .24, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }} {...GLASS_HEAVY}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Download size={17} color={theme.accent} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }} numberOfLines={1}>{activeDownload.filename}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{activeDownload.state === 'paused' ? 'Paused' : `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 0}% · Open downloads`}</Text></View><ChevronRight size={15} color={theme.faint} /></View>
           <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden', marginTop: 9 }}><View style={{ height: '100%', width: `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 4}%`, backgroundColor: theme.accent }} /></View>
