@@ -11,7 +11,7 @@ import {
   Mouse, PanelTop, PanelTopOpen, Maximize2, Minimize2, Layers, BookOpen, ZapOff,
   Fingerprint, Scan, Webhook, Database, Upload, GitBranch, Terminal,
   FileCode, GlobeLock, Hand, MessageSquare, Focus, Volume2,
-  MonitorSpeaker, Network, Radar, Timer, ArrowUpCircle
+  MonitorSpeaker, Network, Radar, Timer, ArrowUpCircle, Columns2
 } from 'lucide-react';
 
 import { ipc, CHROME_H, BANNER_H, FIND_H, APP_VERSION, EASE, T_BG, HOVER, THEMES, ACCENT_PRESETS, START_BGS, ENGINES, PAGES, TIEDDR_APPS, resolveTheme, urlOf, host, when, bytes, trunc, storeIdOf, Brand, TieddrMark, VaultMark, SiteIcon, GLASS_LIGHT, GLASS_MEDIUM, GLASS_HEAVY } from './utils';
@@ -155,34 +155,25 @@ function FindBar({ text, setText, count, onNext, onPrev, onClose, theme }) {
   );
 }
 
-const DEFAULT_DIALS = [
-  { url: 'https://google.com', host: 'Google' }, { url: 'https://youtube.com', host: 'YouTube' },
-  { url: 'https://github.com', host: 'GitHub' }, { url: 'https://mail.google.com', host: 'Gmail' },
-  { url: 'https://x.com', host: 'X' }, { url: 'https://reddit.com', host: 'Reddit' }
+const DEFAULT_SITE_APPS = [
+  { id: 'whatsapp', name: 'WhatsApp', url: 'https://web.whatsapp.com', icon: 'https://www.google.com/s2/favicons?domain=web.whatsapp.com&sz=128' },
+  { id: 'instagram', name: 'Instagram', url: 'https://www.instagram.com', icon: 'https://www.google.com/s2/favicons?domain=instagram.com&sz=128' },
+  { id: 'tiktok', name: 'TikTok', url: 'https://www.tiktok.com', icon: 'https://www.google.com/s2/favicons?domain=tiktok.com&sz=128' },
+  { id: 'space-drop', name: 'Space Drop', url: 'https://space.tieddr.com/drop', icon: TIEDDR_APPS.find(app => app.name === 'Space')?.icon },
+  { id: 'mavis', name: 'Mavis', url: 'https://mavis.tieddr.com', icon: TIEDDR_APPS.find(app => app.name === 'Mavis')?.icon }
 ];
 
-function Start({ go, open, bookmarks, history, account, settings, theme }) {
+function Start({ go, open, bookmarks, account, settings, theme, apps, openApp }) {
   const [q, setQ] = useState('');
   const [now, setNow] = useState(() => new Date());
+  const [news, setNews] = useState({ loading: true, items: [] });
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 20000); return () => clearInterval(id); }, []);
+  useEffect(() => { ipc?.invoke('get-tieddr-news').then(result => setNews({ loading: false, ...(result || { ok: false, items: [] }) })); }, []);
   const hour = now.getHours();
   const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const first = account && account.name ? account.name.split(' ')[0] : '';
 
-  // Most-visited sites, ranked by frequency and deduped by host.
-  const dials = useMemo(() => {
-    const map = {}; const order = [];
-    for (const h of history) {
-      try {
-        const u = new URL(h.url); const key = u.hostname.replace(/^www\./, '');
-        if (!key) continue;
-        if (!map[key]) { map[key] = { url: `${u.protocol}//${u.hostname}`, host: key, favicon: h.favicon, n: 0 }; order.push(key); }
-        map[key].n++; if (h.favicon) map[key].favicon = h.favicon;
-      } catch { /* skip */ }
-    }
-    const top = order.map(k => map[k]).sort((a, b) => b.n - a.n).slice(0, 8);
-    return top.length >= 4 ? top : DEFAULT_DIALS;
-  }, [history]);
+  const dials = apps?.length ? apps : DEFAULT_SITE_APPS;
 
   // Resolve the start page background.
   const bgPreset = START_BGS.find(b => b.id === (settings.startBackground || 'none'));
@@ -220,11 +211,10 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
         </View>
       ) : null}
 
-      {/* Clock */}
-      <View style={s.clockWrap}>
-        <Text style={[s.clock, { color: isLightBg ? '#1a1a1a' : '#eee' }]}>{now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
-        <Text style={[s.greet, { color: isLightBg ? '#555' : '#999' }]}>{greet}{first ? `, ${first}` : ''}</Text>
-        <Text style={[s.startDate, { color: isLightBg ? '#777' : '#666' }]}>{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+      <View style={[s.clockWrap, { alignItems: 'flex-start', width: '100%', maxWidth: 920 }]}>
+        <Text style={[s.greet, { color: isLightBg ? '#555' : '#9ca3af', fontSize: 14, fontWeight: '700', letterSpacing: .8, textTransform: 'uppercase' }]}>{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+        <Text style={[s.clock, { color: isLightBg ? '#111' : '#f5f5f5', fontSize: 48, marginTop: 8 }]}>{greet}{first ? `, ${first}` : ''}.</Text>
+        <Text style={[s.startDate, { color: isLightBg ? '#666' : '#8b929d', fontSize: 15, marginTop: 8 }]}>What would you like to move forward today?</Text>
       </View>
 
       {/* Search bar — glass effect */}
@@ -234,12 +224,11 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
         {q ? <TouchableOpacity onPress={() => { go(q); setQ(''); }}><ArrowRight size={16} color={isLightBg ? '#555' : '#aaa'} /></TouchableOpacity> : null}
       </View>
 
-      {/* Speed dials */}
-      <View style={s.startDials}>
+      <View style={[s.startDials, { maxWidth: 920, justifyContent: 'flex-start' }]}>
         {dials.map(d => (
-          <TouchableOpacity key={d.url} dataSet={HOVER} style={[s.startDial, { backgroundColor: isLightBg ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', borderColor: isLightBg ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }]} onPress={() => go(d.url)}>
-            <View style={[s.startDialIcon, { backgroundColor: isLightBg ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]}><SiteIcon url={d.url} favicon={d.favicon} theme={theme} size={20} /></View>
-            <Text style={[s.startDialLabel, { color: isLightBg ? '#555' : '#999' }]} numberOfLines={1}>{d.host}</Text>
+          <TouchableOpacity key={d.id || d.url} dataSet={HOVER} style={[s.startDial, { width: 110, height: 92, backgroundColor: isLightBg ? 'rgba(255,255,255,0.62)' : 'rgba(255,255,255,0.065)', borderColor: isLightBg ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.09)' }]} onPress={() => openApp(d)}>
+            <View style={[s.startDialIcon, { backgroundColor: isLightBg ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)' }]}>{d.icon ? <Image source={{ uri: d.icon }} style={{ width: 24, height: 24, borderRadius: 6 }} /> : <SiteIcon url={d.url} theme={theme} size={22} />}</View>
+            <Text style={[s.startDialLabel, { color: isLightBg ? '#333' : '#c4c8cf', fontWeight: '600' }]} numberOfLines={1}>{d.name || host(d.url)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -248,7 +237,6 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
       <View style={s.startQuickRow}>
         {[
           { icon: Star, label: 'Bookmarks', page: 'bookmarks' },
-          { icon: Clock, label: 'History', page: 'history' },
           { icon: Shield, label: 'Vault', page: 'vault' },
           { icon: Sparkles, label: 'Mavis', page: 'mavis', url: 'https://mavis.tieddr.com' },
           { icon: Settings, label: 'Settings', page: 'settings' },
@@ -260,10 +248,12 @@ function Start({ go, open, bookmarks, history, account, settings, theme }) {
         ))}
       </View>
 
-      {/* Bottom sections */}
-      <View style={s.startCols}>
+      <View style={[s.startCols, { maxWidth: 920 }]}>
         <StartMini title="Bookmarks" action="View all" onAction={() => open('bookmarks')} rows={bookmarks.slice(0, 4)} icon={Star} empty="Star pages to keep them close." go={go} isLightBg={isLightBg} />
-        <StartMini title="Recent" action="Open history" onAction={() => open('history')} rows={history.slice(0, 4)} icon={Clock} empty="Visited pages will appear here." go={go} isLightBg={isLightBg} />
+        <View style={[s.startMini, { backgroundColor: isLightBg ? 'rgba(255,255,255,.58)' : 'rgba(255,255,255,.05)', borderColor: isLightBg ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.07)' }]} {...GLASS_LIGHT}>
+          <View style={s.rowBetween}><Text style={[s.startMiniTitle, { color: isLightBg ? '#222' : '#ddd' }]}>Tieddr News</Text><Text style={[s.startMiniAction, { color: isLightBg ? '#666' : '#888' }]}>Your briefing</Text></View>
+          {news.loading ? <Text style={[s.startMiniEmpty, { color: isLightBg ? '#888' : '#777' }]}>Connecting to Tieddr News…</Text> : news.items?.length ? news.items.slice(0, 4).map(item => <TouchableOpacity key={item.id} style={s.startMiniRow} onPress={() => go(item.url)}><View style={{ flex: 1 }}><Text style={[s.startMiniText, { color: isLightBg ? '#333' : '#ccc', fontWeight: '600' }]} numberOfLines={1}>{item.title}</Text><Text style={{ color: isLightBg ? '#777' : '#777', fontSize: 10.5, marginTop: 2 }}>{item.source}</Text></View></TouchableOpacity>) : <View><Text style={[s.startMiniEmpty, { color: isLightBg ? '#777' : '#777' }]}>Tieddr News is getting ready. Your feed will appear here as soon as the service is live.</Text><TouchableOpacity onPress={() => go('https://tieddr.com/news')}><Text style={{ color: isLightBg ? '#444' : '#aaa', fontSize: 12, fontWeight: '700', marginTop: 12 }}>Open Tieddr News →</Text></TouchableOpacity></View>}
+        </View>
       </View>
 
       {/* Flowr branding */}
@@ -352,8 +342,10 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
           return (
             <TouchableOpacity key={t.id} dataSet={{ tabid: t.id, tabenter: '1', tabclosing: closingTabs?.has(t.id) ? '1' : undefined, ...(a ? {} : { tab: '1' }) }}
               style={[s.tab, T_BG, a ? { backgroundColor: theme.strong, borderColor: theme.border } : { borderColor: 'transparent' },
+                t.groupId && { borderTopWidth: 2, borderTopColor: t.groupColor || theme.accent },
                 dragging && { transform: [{ translateX: drag.dx }, { scale: 1.04 }], zIndex: 6, backgroundColor: theme.strong, borderColor: theme.accent, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }]}
               onPress={() => { if (suppress.current) return; onSwitch(t.id); }}>
+              {t.groupId ? <View title={t.groupLabel || 'Tab group'} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.groupColor || theme.accent, flexShrink: 0 }} /> : null}
               {t.loading ? <View dataSet={{ spin: '1' }} style={s.spin}><RotateCcw size={13} color={theme.accent} /></View>
                 : page ? <PageIcon size={14} color={a ? theme.accent : theme.faint} />
                   : t.favicon ? <Image source={{ uri: t.favicon }} style={s.fav} />
@@ -374,7 +366,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, incognito, ac
   );
 }
 
-function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, home, menu, bookmark, bookmarked, updateStatus, onUpdate, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
+function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, home, menu, bookmark, bookmarked, updateStatus, onUpdate, groupSuggestion, onGroup, splitTabId, onSplit, onInstallApp, pinnedExts, onExt, onExtPanel, onMavis, bookmarks, history, theme, extPanelOpen, setExtPanelOpen, extActs, clickExt, openPage, toggleExtension, pinExt, showViewLive, urlWrapRef, input, setInput, focused, setFocused, selIdx, setSelIdx, clickingSuggestion, ddCooldownRef }) {
   const themeRef = useRef(theme); themeRef.current = theme;
   const prevSugsRef = useRef('');
   const ddOpenRef = useRef(false);
@@ -483,6 +475,9 @@ function Nav({ tab, isWeb, loading, urlRef, go, back, forward, reload, stop, hom
         )}
       </View>
       <View style={[s.navDivider, { backgroundColor: theme.border }]} />
+      {isWeb && tab.url !== 'about:blank' ? <View style={{ position: 'relative' }}><I icon={LayoutGrid} label={tab.groupId ? 'Remove tab from group' : groupSuggestion?.length > 1 ? `Group ${groupSuggestion.length} related tabs` : 'Group this tab'} onPress={onGroup} solid={!!tab.groupId || groupSuggestion?.length > 1} theme={theme} />{!tab.groupId && groupSuggestion?.length > 1 ? <View style={{ position: 'absolute', right: -2, top: -3, minWidth: 14, height: 14, borderRadius: 7, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accent }}><Text style={{ fontSize: 8.5, fontWeight: '800', color: theme.onAccent }}>{groupSuggestion.length}</Text></View> : null}</View> : null}
+      {isWeb ? <I icon={PanelTopOpen} label={splitTabId ? 'Close split view' : 'Open split view'} onPress={onSplit} solid={!!splitTabId} theme={theme} /> : null}
+      {isWeb && tab.url !== 'about:blank' ? <I icon={Download} label={tab.pwa?.manifest ? 'Install this PWA in Flowr' : 'Add this site to Flowr apps'} onPress={onInstallApp} solid={!!tab.pwa?.manifest} theme={theme} /> : null}
       <I icon={Star} label="Bookmark" onPress={bookmark} solid={bookmarked} theme={theme} />
       {updateStatus?.available ? <View style={{ position: 'relative' }}>
         <I icon={ArrowUpCircle} label={updateStatus.phase === 'downloaded' ? 'Install Flowr update' : `Update to Flowr ${updateStatus.latestVersion || ''}`} onPress={onUpdate} solid theme={theme} />
@@ -841,36 +836,57 @@ function PasswordRow({ p, onReveal, onCopy, onDelete, theme }) {
 }
 
 function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onDone, theme }) {
+  const [step, setStep] = useState(0);
   const features = [
     { icon: ShieldCheck, title: 'Private by design', text: 'Encrypted history, tracker protection, redirect controls, and Vault-backed browser locks.' },
     { icon: Sparkles, title: 'Mavis beside every page', text: 'Open your private Tieddr assistant without leaving the site you are working in.' },
     { icon: Gauge, title: 'Made for lighter devices', text: 'Memory Saver releases inactive tabs and keeps renderer usage under control.' },
     { icon: KeyRound, title: 'Vault-powered autofill', text: 'Passwords imported into Tieddr Vault can securely fill forms across Flowr.' }
   ];
-  return <ScrollView style={{ flex: 1, backgroundColor: theme.bg }} contentContainerStyle={{ padding: 38, alignItems: 'center', minHeight: '100%' }}>
-    <View dataSet={{ welcome: '1' }} style={{ width: '100%', maxWidth: 1080, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: theme.border, background: `radial-gradient(circle at 12% 0%, ${theme.accentSoft}, transparent 34%), linear-gradient(145deg, ${theme.panel}, ${theme.bg})`, boxShadow: '0 30px 90px rgba(0,0,0,.28)' }}>
-      <View style={{ padding: 42, borderBottomWidth: 1, borderBottomColor: theme.border, position: 'relative' }}>
-        <View dataSet={{ welcomeorb: '1' }} style={{ position: 'absolute', width: 220, height: 220, borderRadius: 110, right: -55, top: -78, backgroundColor: theme.accentSoft, opacity: .8 }} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 }}><Brand size={42} radius={13} /><Text style={{ color: theme.text, fontSize: 17, fontWeight: '800', letterSpacing: .3 }}>FLOWR {APP_VERSION}</Text></View>
-        <Text style={{ color: theme.text, fontSize: 42, lineHeight: 48, fontWeight: '800', letterSpacing: -1.4, maxWidth: 700 }}>{firstRun ? 'Welcome to a calmer web.' : `Flowr ${APP_VERSION} is ready.`}</Text>
-        <Text style={{ color: theme.muted, fontSize: 16, lineHeight: 25, maxWidth: 660, marginTop: 14 }}>{firstRun ? 'Bring your bookmarks and passwords, connect your Tieddr Account, and make Flowr yours.' : 'See the newest privacy, performance, browsing, and Tieddr integration improvements.'}</Text>
+  const steps = firstRun ? [
+    { eyebrow: 'Welcome to your new browser', title: 'Less browser.\nMore of your flow.', text: 'Flowr brings your web, Tieddr Account, Vault, Space, and Mavis into one focused workspace.', icon: Sparkles },
+    { eyebrow: 'Bring your web with you', title: 'Your bookmarks and passwords belong here.', text: 'Import from another browser. Password files are only accepted after your encrypted Vault is unlocked.', icon: Upload },
+    { eyebrow: 'One account, every Tieddr app', title: account ? 'Your Tieddr world is connected.' : 'Connect once. Keep your flow everywhere.', text: account ? `${account.name || account.email} is connected to Flowr.` : 'Connect your real Tieddr profile for Vault, Space, Mavis, sync, and a consistent identity.', icon: UserCheck },
+    { eyebrow: 'You are ready', title: 'A faster, quieter web starts now.', text: 'Tracker protection, redirect controls, Memory Saver, side apps, and Mavis are ready when you are.', icon: ShieldCheck }
+  ] : [
+    { eyebrow: `Flowr ${APP_VERSION}`, title: 'Your browser just learned new moves.', text: 'This update introduces richer workspaces, smarter privacy, and a start page built around what you choose.', icon: Sparkles },
+    { eyebrow: 'Tabs that work together', title: 'Group it. Split it. Keep moving.', text: 'Group related tabs and work with two pages side by side without losing your place.', icon: Columns2 },
+    { eyebrow: 'Apps and privacy', title: 'Your essentials, one gesture away.', text: 'Keep web apps in the side panel while redirect protection and Memory Saver work quietly underneath.', icon: ShieldCheck },
+    { eyebrow: 'Ready when you are', title: 'Step into the new Flowr.', text: 'Everything is set. You can revisit these changes from Settings at any time.', icon: Gauge }
+  ];
+  const current = steps[step];
+  const CurrentIcon = current.icon;
+  const last = step === steps.length - 1;
+  return <View dataSet={{ welcome: '1' }} style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.bg, overflow: 'hidden' }}>
+    <View style={{ width: '57%', paddingHorizontal: 62, paddingVertical: 48, justifyContent: 'space-between', position: 'relative', background: `radial-gradient(circle at 16% 4%, ${theme.accentSoft}, transparent 28%), linear-gradient(155deg, ${theme.chrome}, ${theme.bg})` }}>
+      <View dataSet={{ welcomeorb: 'a' }} style={{ position: 'absolute', width: 460, height: 460, borderRadius: 230, left: -180, bottom: -190, backgroundColor: theme.accentSoft, opacity: .72 }} />
+      <View dataSet={{ welcomeorb: 'b' }} style={{ position: 'absolute', width: 300, height: 300, borderRadius: 150, right: -80, top: 50, backgroundColor: theme.accent, opacity: .1 }} />
+      <View dataSet={{ welcomegrid: '1' }} style={{ position: 'absolute', inset: 0, opacity: .15, backgroundImage: `linear-gradient(${theme.border} 1px, transparent 1px), linear-gradient(90deg, ${theme.border} 1px, transparent 1px)`, backgroundSize: '42px 42px' }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Brand size={38} radius={12} /><Text style={{ color: theme.text, fontSize: 13, fontWeight: '800', letterSpacing: 2 }}>FLOWR / {APP_VERSION}</Text></View>
+      <View key={`visual-${step}`} dataSet={{ welcomepanel: '1' }} style={{ maxWidth: 650 }}>
+        <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 22 }}><CurrentIcon size={24} color={theme.accent} /></View>
+        <Text style={{ color: theme.faint, fontSize: 12, fontWeight: '800', letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 16 }}>{current.eyebrow}</Text>
+        <Text style={{ color: theme.text, fontSize: 56, lineHeight: 59, fontWeight: '800', letterSpacing: -2.5 }}>{current.title}</Text>
+        <Text style={{ color: theme.muted, fontSize: 16, lineHeight: 26, maxWidth: 540, marginTop: 22 }}>{current.text}</Text>
       </View>
-      <View style={{ padding: 34 }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-          {features.map(({ icon: Icon, title, text }) => <View key={title} style={{ width: 'calc(50% - 7px)', minWidth: 280, padding: 20, borderRadius: 18, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.border }} {...GLASS_MEDIUM}>
-            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}><Icon size={19} color={theme.accent} /></View>
-            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{title}</Text><Text style={{ color: theme.muted, fontSize: 13, lineHeight: 20, marginTop: 6 }}>{text}</Text>
-          </View>)}
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 26 }}>
-          <TouchableOpacity onPress={onImport} style={[s.primary, { backgroundColor: theme.accent }]}><Upload size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Import browser data</Text></TouchableOpacity>
-          {!account ? <TouchableOpacity onPress={onSignIn} style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]}><LogIn size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Sign in to Tieddr Account</Text></TouchableOpacity> : <View style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]}><UserCheck size={16} color={theme.success} /><Text style={[s.actionText, { color: theme.text }]}>{account.name || account.email} connected</Text></View>}
-          <TouchableOpacity onPress={onDone} style={[s.action, { marginLeft: 'auto', backgroundColor: theme.panel, borderColor: theme.border }]}><CheckCircle size={16} color={theme.success} /><Text style={[s.actionText, { color: theme.text }]}>Start browsing</Text></TouchableOpacity>
-        </View>
-        {!vaultUnlocked ? <Text style={{ color: theme.faint, fontSize: 11.5, marginTop: 12 }}>Unlock Tieddr Vault before importing a password CSV. Bookmark HTML or JSON can be imported immediately.</Text> : null}
-      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>{steps.map((_, index) => <View key={index} style={{ width: index === step ? 34 : 8, height: 8, borderRadius: 4, backgroundColor: index <= step ? theme.accent : theme.border, transition: 'all .35s ease' }} />)}</View>
     </View>
-  </ScrollView>;
+    <View style={{ width: '43%', backgroundColor: theme.panel, paddingHorizontal: 44, paddingVertical: 46, justifyContent: 'center' }}>
+      <View key={`step-${step}`} dataSet={{ welcomepanel: '1' }}>
+        <Text style={{ color: theme.faint, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 }}>STEP {step + 1} OF {steps.length}</Text>
+        <Text style={{ color: theme.text, fontSize: 26, lineHeight: 32, fontWeight: '760', letterSpacing: -.7, marginTop: 15 }}>{step === 0 ? (firstRun ? 'Let’s make Flowr yours.' : 'See what changed.') : step === 1 ? (firstRun ? 'Bring your essentials.' : 'Work across tabs.') : step === 2 ? (firstRun ? 'Connect your Tieddr Account.' : 'A calmer, smarter workspace.') : 'Everything is ready.'}</Text>
+        <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, marginTop: 9, marginBottom: 24 }}>{current.text}</Text>
+        {step === 1 && firstRun ? <><TouchableOpacity onPress={onImport} style={[s.primary, { width: '100%', justifyContent: 'center', backgroundColor: theme.accent }]}><Upload size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Choose files to import</Text></TouchableOpacity>{!vaultUnlocked ? <Text style={{ color: theme.faint, fontSize: 10.5, textAlign: 'center', lineHeight: 16, marginTop: 10 }}>Unlock Vault before importing password CSV files.</Text> : null}</> : null}
+        {step === 2 && firstRun ? (!account ? <TouchableOpacity onPress={onSignIn} style={[s.primary, { width: '100%', justifyContent: 'center', backgroundColor: theme.accent }]}><LogIn size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Connect Tieddr Account</Text></TouchableOpacity> : <View style={[s.action, { width: '100%', justifyContent: 'center', backgroundColor: theme.soft, borderColor: theme.border }]}><UserCheck size={16} color={theme.success} /><Text style={[s.actionText, { color: theme.text }]}>{account.name || account.email} connected</Text></View>) : null}
+        {(!firstRun || step === 3) ? features.slice(0, step === 3 ? 3 : 2).map(({ icon: Icon, title }, index) => <View key={title} dataSet={{ welcomestep: String(index) }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.border }}><Icon size={16} color={theme.accent} /><Text style={{ color: theme.text, fontSize: 13, fontWeight: '650' }}>{title}</Text></View>) : null}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 30, gap: 10 }}>
+        {step > 0 ? <TouchableOpacity onPress={() => setStep(value => value - 1)} style={[s.action, { backgroundColor: theme.soft, borderColor: theme.border }]}><ArrowLeft size={16} color={theme.text} /><Text style={[s.actionText, { color: theme.text }]}>Back</Text></TouchableOpacity> : <View />}
+        <TouchableOpacity onPress={() => last ? onDone() : setStep(value => value + 1)} style={[s.primary, { flex: 1, justifyContent: 'center', backgroundColor: theme.accent }]}><Text style={[s.primaryText, { color: theme.onAccent }]}>{last ? 'Enter Flowr' : 'Continue'}</Text><ArrowRight size={16} color={theme.onAccent} /></TouchableOpacity>
+      </View>
+      <Text style={{ color: theme.faint, fontSize: 10.5, lineHeight: 16, textAlign: 'center', marginTop: 14 }}>You can change every choice later in Settings.</Text>
+    </View>
+  </View>;
 }
 
 function SettingsPage({ settings, profiles, active, update, createProfile, switchProfile, openPage, go, clearData, setDefault, chooseDownloads, reset, account, onSignIn, onSignOut, onImport, passwords, onRevealPw, onCopyPw, onDeletePw, pwEncAvail, theme, biometricAvailable, changeVaultPin }) {
@@ -1603,7 +1619,7 @@ function rectOf(el) {
   catch (_) { return { left: 0, top: 0 }; }
 }
 
-const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
+const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
   const hostRef = useRef(null);
 
   useEffect(() => {
@@ -1737,6 +1753,10 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
     };
     const onDomReady = () => {
       try { h().register(wv.getWebContentsId()); } catch (_) {}
+      try {
+        wv.executeJavaScript(`(async function(){var m=document.querySelector('link[rel~="manifest"]');var icon=document.querySelector('link[rel="apple-touch-icon"],link[rel="icon"]');var out={manifest:m?m.href:'',icon:icon?icon.href:'',name:document.querySelector('meta[name="application-name"]')?.content||document.title||'',startUrl:location.origin};if(m){try{var data=await fetch(m.href).then(r=>r.json());out.name=data.name||data.short_name||out.name;out.startUrl=new URL(data.start_url||'/',m.href).href;var best=(data.icons||[]).slice().sort((a,b)=>(parseInt(b.sizes)||0)-(parseInt(a.sizes)||0))[0];if(best)out.icon=new URL(best.src,m.href).href}catch(e){}}return out})()`)
+          .then(info => h().pwaDetected(tab.id, info || {})).catch(() => {});
+      } catch (_) {}
       sizeGuest();
     };
 
@@ -1795,10 +1815,11 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, preloadUrl, i
     if (wv && preloadUrl) wv.setAttribute('preload', preloadUrl);
   }, [preloadUrl]);
 
-  return <div ref={hostRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
+  const splitStyle = layout === 'left' ? { left: 0, right: '50%', width: '50%' } : layout === 'right' ? { left: '50%', right: 0, width: '50%', borderLeft: '1px solid rgba(128,128,128,.28)' } : { left: 0, right: 0, width: '100%' };
+  return <div ref={hostRef} style={{ position: 'absolute', top: 0, bottom: 0, ...splitStyle, height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
 });
 
-function SidePanelHost({ info, preloadUrl, contentRef, onClose, theme }) {
+function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme }) {
   const ref = useRef(null);
   useEffect(() => {
     const host = ref.current;
@@ -1815,8 +1836,8 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, theme }) {
   }, [info.extId, info.url, preloadUrl, info.incognito]);
   return <View ref={ref} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: info.width || 400, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme?.border || 'rgba(255,255,255,0.12)', backgroundColor: theme?.panel || '#111' }}>
     <View style={{ height: 42, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: theme?.border || 'rgba(255,255,255,0.12)' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Sparkles size={16} color={theme?.accent} /><Text style={{ color: theme?.text, fontWeight: '700' }}>{info.mavis ? 'Mavis' : 'Side panel'}</Text></View>
-      <I icon={X} label="Close sidebar" onPress={onClose} theme={theme} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>{info.icon ? <Image source={{ uri: info.icon }} style={{ width: 18, height: 18, borderRadius: 4 }} /> : <Sparkles size={16} color={theme?.accent} />}<Text style={{ color: theme?.text, fontWeight: '700' }}>{info.name || (info.mavis ? 'Mavis' : 'Side panel')}</Text></View>
+      <View style={{ flexDirection: 'row' }}><I icon={ExternalLink} label="Open in tab" onPress={() => { onOpenTab?.(info.url); onClose(); }} theme={theme} /><I icon={X} label="Close sidebar" onPress={onClose} theme={theme} /></View>
     </View>
   </View>;
 }
@@ -1865,6 +1886,7 @@ export default function App() {
   const [sidePanel, setSidePanel] = useState({ open: false, extId: null });
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
+  const [splitTabId, setSplitTabId] = useState(null);
   const urlRef = useRef(null);
   const extActsRef = useRef(extActs); extActsRef.current = extActs;
   const pendingPwRef = useRef(null);
@@ -1910,6 +1932,15 @@ export default function App() {
   const showViewLive = isWeb && !isStart;
   const storeId = showViewLive ? storeIdOf(tab.url) : null;
   const marked = isWeb && bookmarks.some(x => x.url === tab.url && tab.url !== 'about:blank');
+  const siteApps = useMemo(() => {
+    const custom = Array.isArray(settings.siteApps) ? settings.siteApps : [];
+    return [...DEFAULT_SITE_APPS, ...custom.filter(item => !DEFAULT_SITE_APPS.some(defaultApp => defaultApp.id === item.id))];
+  }, [settings.siteApps]);
+  const relatedTabs = useMemo(() => {
+    if (!isWeb || !tab.url || tab.url === 'about:blank') return [];
+    let key = ''; try { const parts = new URL(tab.url).hostname.replace(/^www\./, '').split('.'); key = parts.slice(-2).join('.'); } catch (_) {}
+    return tabs.filter(item => item.kind === 'web' && item.url && item.url !== 'about:blank' && (() => { try { const parts = new URL(item.url).hostname.replace(/^www\./, '').split('.'); return parts.slice(-2).join('.') === key; } catch (_) { return false; } })()).map(item => item.id);
+  }, [tabs, tab.id, tab.url, isWeb]);
   const viewTop = CHROME_H + (findOpen && showViewLive ? FIND_H : 0) + (storeId ? BANNER_H : 0);
 
   const activeIdRef = useRef(activeId); activeIdRef.current = activeId;
@@ -1930,6 +1961,9 @@ export default function App() {
       ? { ...t, discarded: false, lastActiveAt: now }
       : t));
   }, [activeId]);
+  useEffect(() => {
+    if (!isWeb || splitTabId === activeId || !tabs.some(item => item.id === splitTabId)) setSplitTabId(null);
+  }, [activeId, isWeb, splitTabId, tabs]);
 
   useEffect(() => {
     if (settings.memorySaver === false) return undefined;
@@ -2005,6 +2039,7 @@ export default function App() {
   }, [openWebTab]);
 
   const closeTab = useCallback(id => {
+    setSplitTabId(current => current === id ? null : current);
     setClosingTabs(prev => new Set([...prev, id]));
     setTimeout(() => {
       setTabs(prev => {
@@ -2032,6 +2067,28 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const toggleTabGroup = useCallback(() => {
+    const current = tabRef.current;
+    if (!current || current.kind !== 'web') return;
+    if (current.groupId) {
+      setTabs(items => items.map(item => item.groupId === current.groupId ? { ...item, groupId: null, groupLabel: '', groupColor: '' } : item));
+      return;
+    }
+    let label = 'Related'; try { label = new URL(current.url).hostname.replace(/^www\./, '').split('.').slice(-2, -1)[0] || 'Related'; } catch (_) {}
+    const ids = relatedTabs.length > 1 ? relatedTabs : [current.id];
+    const groupId = `group-${Date.now()}`;
+    const colors = ['#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#3b82f6'];
+    const color = colors[Math.abs(label.length) % colors.length];
+    setTabs(items => items.map(item => ids.includes(item.id) ? { ...item, groupId, groupLabel: label, groupColor: color } : item));
+  }, [relatedTabs]);
+
+  const toggleSplitView = useCallback(() => {
+    if (splitTabId) { setSplitTabId(null); return; }
+    const other = tabs.find(item => item.kind === 'web' && item.id !== activeId && item.url && item.url !== 'about:blank');
+    if (!other) { setOverlay({ kind: 'dialog', theme, title: 'Open another page first', message: 'Split view places two open websites side by side. Open a second website, then choose Split view again.' }); return; }
+    setSplitTabId(other.id);
+  }, [splitTabId, tabs, activeId, theme]);
 
   const bookmark = useCallback(async () => {
     const t = tabRef.current;
@@ -2107,6 +2164,21 @@ export default function App() {
   const translate = useCallback(() => { const u = tabRef.current.url; if (u && u !== 'about:blank') openWebTab(`https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(u)}`); }, [openWebTab]);
 
   const showDialog = useCallback((d) => setOverlay({ kind: 'dialog', theme: theme, ...d }), [theme]);
+  const openSiteApp = useCallback(appItem => {
+    if (!appItem?.url) return;
+    setSidePanel({ open: true, extId: `site-app:${appItem.id || host(appItem.url)}`, siteApp: true, name: appItem.name || host(appItem.url), icon: appItem.icon || '', url: appItem.url, width: 430, incognito });
+  }, [incognito]);
+  const installCurrentSite = useCallback(async () => {
+    const current = tabRef.current;
+    if (!current?.url || current.url === 'about:blank') return;
+    const id = `site-${host(current.url).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+    const item = { id, name: current.pwa?.name || current.title || host(current.url), url: current.pwa?.startUrl || current.url, icon: current.pwa?.icon || current.favicon || '', manifest: current.pwa?.manifest || '' };
+    const existing = Array.isArray(settingsRef.current.siteApps) ? settingsRef.current.siteApps : [];
+    const next = [item, ...existing.filter(appItem => appItem.id !== id)];
+    const updated = await ipc.invoke('update-settings', { siteApps: next });
+    setSettings(previous => ({ ...previous, ...(updated || {}), siteApps: next }));
+    showDialog({ title: `${item.name} added to Flowr`, message: item.manifest ? 'The PWA is now available from your start page and opens in the Flowr side panel.' : 'This website is now available from your start page and opens in the Flowr side panel.' });
+  }, [showDialog]);
 
   // Extension toolbar: click a pinned icon to open its popup, or the puzzle
   // button for the quick-view panel of all extensions.
@@ -2154,6 +2226,9 @@ export default function App() {
       { label: 'Print…', icon: 'Printer', hint: 'Ctrl P', disabled: !canWeb, action: { cmd: 'print' } },
       { label: 'Save page as…', icon: 'Save', disabled: !canWeb, action: { cmd: 'savePage' } },
       { label: 'Translate page', icon: 'Languages', disabled: !canWeb, action: { menu: 'translate' } },
+      { label: t.pwa?.manifest ? 'Install this PWA in Flowr' : 'Add this site to Flowr apps', icon: 'Download', disabled: !canWeb, action: { menu: 'install-site-app' } },
+      { label: splitTabId ? 'Close split view' : 'Open split view', icon: 'PanelTopOpen', disabled: !canWeb, action: { menu: 'split-view' } },
+      { label: t.groupId ? 'Remove tab group' : 'Group related tabs', icon: 'LayoutGrid', disabled: !canWeb, action: { menu: 'group-tabs' } },
       { type: 'sep' },
       { label: 'Bookmark this page', icon: 'Star', hint: 'Ctrl D', disabled: !canWeb, action: { menu: 'bookmark' } },
       { label: 'Bookmarks', icon: 'Bookmark', action: { menu: 'page:bookmarks' } },
@@ -2166,7 +2241,7 @@ export default function App() {
       { label: 'Settings', icon: 'Settings', hint: 'Ctrl ,', action: { menu: 'page:settings' } }
     ];
     setOverlay({ kind: 'menu', theme, zoom: zoomRef.current, items, width: 288 });
-  }, []);
+  }, [splitTabId]);
 
   // Build a context menu from the params reported by main, and open it as glass.
   const openContext = useCallback((p) => {
@@ -2228,6 +2303,9 @@ export default function App() {
         case 'find': openFind(); break;
         case 'translate': translate(); break;
         case 'bookmark': bookmark(); break;
+        case 'install-site-app': installCurrentSite(); break;
+        case 'split-view': toggleSplitView(); break;
+        case 'group-tabs': toggleTabGroup(); break;
         case 'zoom-in': doZoom('in'); break;
         case 'zoom-out': doZoom('out'); break;
         case 'zoom-reset': doZoom('reset'); break;
@@ -2251,7 +2329,7 @@ export default function App() {
     else if (a.kind === 'dd-ext-toggle') { toggleExtension(a.id, a.enabled); }
     else if (a.kind === 'dd-ext-pin') { pinExt(a.id, a.pinned); }
     else if (a.kind === 'dd-ext-settings' || a.kind === 'dd-ext-manage') { openPage('extensions'); }
-  }, [openWebTab, openFind, translate, bookmark, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt]);
+  }, [openWebTab, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt]);
 
   useEffect(() => {
     const wv = activeWebview();
@@ -2272,6 +2350,7 @@ export default function App() {
     contextMenu: (p) => openContext(p),
     newTab: (url) => openWebTab(url),
     register: (id) => ipc?.send('register-webview', id),
+    pwaDetected: (id, info) => setTabs(items => items.map(item => item.id === id ? { ...item, pwa: info } : item)),
     installTheme: async (manifest, wv) => {
       const result = await ipc?.invoke('install-flowr-theme', manifest);
       if (result?.ok) {
@@ -2464,7 +2543,7 @@ export default function App() {
     <View style={[s.app, { backgroundColor: theme.bg }]}>
       <View style={[s.chrome, { backgroundColor: theme.chrome + 'cc', borderBottomColor: theme.border + '60', zIndex: 1001 }]} {...GLASS_HEAVY}>
         <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
-        <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked} updateStatus={updateStatus} onUpdate={() => updateStatus?.phase === 'downloaded' ? ipc.invoke('install-update') : updateStatus?.phase === 'available' ? ipc.invoke('download-update') : openPage('settings')}
+        <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked} updateStatus={updateStatus} onUpdate={() => updateStatus?.phase === 'downloaded' ? ipc.invoke('install-update') : updateStatus?.phase === 'available' ? ipc.invoke('download-update') : openPage('settings')} groupSuggestion={relatedTabs} onGroup={toggleTabGroup} splitTabId={splitTabId} onSplit={toggleSplitView} onInstallApp={installCurrentSite}
           pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} bookmarks={bookmarks} history={history} theme={theme}
           extPanelOpen={extPanelOpen} setExtPanelOpen={setExtPanelOpen} extActs={extActs} clickExt={clickExt} openPage={openPage} toggleExtension={toggleExtension} pinExt={pinExt} showViewLive={showViewLive} ddCooldownRef={navDdCooldownRef} urlWrapRef={urlWrapRef}
           focused={navFocused} setFocused={setNavFocused} selIdx={navSelIdx} setSelIdx={setNavSelIdx} clickingSuggestion={navClickingSuggestion}
@@ -2504,13 +2583,13 @@ export default function App() {
       )}
       <View style={[s.content, { height: 'calc(100vh - ' + viewTop + 'px)' }]} ref={contentRef}>
         {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank' && !t.discarded).map(t => (
-          <WebviewHost key={t.id} tab={t} active={isWeb && t.id === activeId} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
+          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
         ))}
         {isWeb ? (
           <>
             {isStart ? (
               <View style={[s.startLayer, { backgroundColor: theme.bg }]}>
-                <Start go={go} open={openPage} bookmarks={bookmarks} history={history} account={account} settings={settings} theme={theme} />
+                <Start go={go} open={openPage} bookmarks={bookmarks} account={account} settings={settings} theme={theme} apps={siteApps} openApp={openSiteApp} />
               </View>
             ) : (
               <View style={s.topBar}>
@@ -2527,7 +2606,7 @@ export default function App() {
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}
-        {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : null}
+        {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} /> : null}
         {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
       </View>
     </View>

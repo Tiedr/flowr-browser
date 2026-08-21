@@ -102,7 +102,9 @@ const SETTINGS_DEFAULTS = {
   accentColor: '',
   startBackground: 'gradient-midnight',
   onboardingCompleted: false,
-  lastSeenVersion: ''
+  lastSeenVersion: '',
+  tieddrNewsEndpoint: 'https://news.tieddr.com/api/feed',
+  siteApps: []
 };
 const settingsStore = new Store('settings', SETTINGS_DEFAULTS);
 // Existing installations inherited Memory Saver's old no-op/disabled default.
@@ -831,6 +833,13 @@ ipcMain.on('register-webview', (event, id) => {
       });
       wc.on('context-menu', (_event, params) => showSiteContextMenu(wc, params));
       wc.on('will-redirect', (event, url) => {
+        let sourceUrl = '';
+        try { sourceUrl = wc.getURL(); } catch (_) {}
+        if (shouldBlockRequest({ url, resourceType: 'mainFrame', initiator: sourceUrl, referrer: sourceUrl }, adBlockerEnabled)) {
+          event.preventDefault();
+          send('ad-navigation-blocked', { sourceUrl, url });
+          return;
+        }
         if (!settingsStore.get('askBeforeIdentityRedirect')) return;
         let destination = '';
         try { destination = new URL(url).hostname.toLowerCase(); } catch (_) { return; }
@@ -1177,6 +1186,28 @@ ipcMain.handle('open-external', (_event, url) => {
   if (!/^https:\/\//i.test(String(url || ''))) return false;
   void shell.openExternal(url);
   return true;
+});
+
+ipcMain.handle('get-tieddr-news', async () => {
+  const endpoint = settingsStore.get('tieddrNewsEndpoint') || 'https://news.tieddr.com/api/feed';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(endpoint, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`Feed returned ${response.status}`);
+    const payload = await response.json();
+    const source = Array.isArray(payload) ? payload : (payload.items || payload.articles || []);
+    const items = source.slice(0, 12).map((item, index) => ({
+      id: String(item.id || item.url || index), title: String(item.title || '').trim(),
+      summary: String(item.summary || item.description || '').trim(), url: String(item.url || item.link || ''),
+      image: String(item.image || item.imageUrl || ''), source: String(item.source?.name || item.source || 'Tieddr News'),
+      publishedAt: item.publishedAt || item.published_at || item.date || ''
+    })).filter(item => item.title && /^https?:\/\//i.test(item.url));
+    return { ok: true, items, endpoint };
+  } catch (error) {
+    return { ok: false, items: [], endpoint, error: error?.name === 'AbortError' ? 'Tieddr News took too long to respond.' : 'Tieddr News is not available yet.' };
+  }
 });
 
 ipcMain.handle('import-browser-data', async () => {
