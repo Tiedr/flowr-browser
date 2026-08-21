@@ -1792,7 +1792,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     // Google and YouTube continuously navigate hidden sodar/gapi frames. Never
     // promote those subframe URLs into Flowr's address bar or active tab.
     const onStartNav = (e) => { if (e?.isMainFrame === false) return; const u = resolveUrl(e?.url || '', ''); if (u) { h().clearNavError(tab.id); h().updateUrl(tab.id, u); } };
-    const onTitle = (e, title) => { if (title) h().updateTitle(tab.id, title); };
+    const onTitle = (e, title) => { if (title) { h().updateTitle(tab.id, title); const currentUrl = resolveUrl(wv.getURL?.() || '', ''); if (currentUrl) h().addHistory(currentUrl, title); } };
     const onFavicon = (e, favicons) => { if (favicons && favicons[0]) h().updateFavicon(tab.id, favicons[0]); };
     const onStartLoad = () => h().updateLoading(tab.id, true);
     const onStopLoad = () => {
@@ -1916,9 +1916,11 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme
     wv.setAttribute('preload', preloadUrl);
     wv.setAttribute('partition', info.incognito ? 'flow-incognito' : 'persist:flow-main');
     wv.setAttribute('webpreferences', 'contextIsolation=yes sandbox=no');
+    wv.setAttribute('allowpopups', 'true');
     wv.style.position = 'absolute'; wv.style.top = '42px'; wv.style.left = '0'; wv.style.right = '0'; wv.style.bottom = '0';
     wv.style.width = '100%'; wv.style.height = 'calc(100% - 42px)'; wv.style.border = 'none'; wv.style.background = '#ffffff';
     host.appendChild(wv);
+    wv.addEventListener('dom-ready', () => { try { ipc?.send('register-webview', wv.getWebContentsId()); } catch (_) {} });
     return () => { if (wv.parentNode) wv.parentNode.removeChild(wv); };
   }, [info.extId, info.url, preloadUrl, info.incognito]);
   return <View ref={ref} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: info.width || 400, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme?.border || 'rgba(255,255,255,0.12)', backgroundColor: theme?.panel || '#111' }}>
@@ -2469,14 +2471,14 @@ export default function App() {
     const items = [];
     const sep = () => items.push({ type: 'sep' });
     if (p.isEditable) {
-      items.push({ label: 'Undo', icon: 'Undo2', disabled: !p.editFlags?.canUndo, action: { cmd: 'undo' } });
-      items.push({ label: 'Redo', icon: 'Redo2', disabled: !p.editFlags?.canRedo, action: { cmd: 'redo' } });
+      items.push({ label: 'Undo', icon: 'Undo2', disabled: !p.editFlags?.canUndo, action: { uiCmd: 'undo' } });
+      items.push({ label: 'Redo', icon: 'Redo2', disabled: !p.editFlags?.canRedo, action: { uiCmd: 'redo' } });
       sep();
-      items.push({ label: 'Cut', icon: 'Scissors', disabled: !p.editFlags?.canCut, action: { cmd: 'cut' } });
-      items.push({ label: 'Copy', icon: 'Copy', disabled: !p.editFlags?.canCopy, action: { cmd: 'copy' } });
-      items.push({ label: 'Paste', icon: 'ClipboardPaste', disabled: !p.editFlags?.canPaste, action: { cmd: 'paste' } });
+      items.push({ label: 'Cut', icon: 'Scissors', disabled: !p.editFlags?.canCut, action: { uiCmd: 'cut' } });
+      items.push({ label: 'Copy', icon: 'Copy', disabled: !p.editFlags?.canCopy, action: { uiCmd: 'copy' } });
+      items.push({ label: 'Paste', icon: 'ClipboardPaste', disabled: !p.editFlags?.canPaste, action: { uiCmd: 'paste' } });
       if (p.ui) items.push({ label: 'Paste and go', icon: 'ArrowRight', action: { pasteAndGo: true } });
-      items.push({ label: 'Select all', icon: 'TextCursorInput', action: { cmd: 'selectAll' } });
+      items.push({ label: 'Select all', icon: 'TextCursorInput', action: { uiCmd: 'selectAll' } });
     } else {
       if (p.linkURL) { items.push({ label: 'Open link in new tab', icon: 'ExternalLink', action: { open: p.linkURL } }); items.push({ label: 'Copy link address', icon: 'Copy', action: { cmd: 'copyText', arg: p.linkURL } }); sep(); }
       if (p.mediaType === 'image' && p.srcURL) { items.push({ label: 'Open image in new tab', icon: 'Image', action: { open: p.srcURL } }); items.push({ label: 'Save image as…', icon: 'Download', action: { cmd: 'saveImage', arg: p.srcURL } }); items.push({ label: 'Copy image', icon: 'Copy', action: { cmd: 'copyImage', arg: { x: p.x, y: p.y } } }); sep(); }
@@ -2519,7 +2521,14 @@ export default function App() {
   // Execute an action reported back from the overlay window.
   const runAction = useCallback((a) => {
     if (!a) return;
-    if (a.menu) {
+    if (a.uiCmd) {
+      const el = document.activeElement;
+      if (a.uiCmd === 'copy' || a.uiCmd === 'cut' || a.uiCmd === 'selectAll' || a.uiCmd === 'undo' || a.uiCmd === 'redo') {
+        try { document.execCommand(a.uiCmd === 'selectAll' ? 'selectAll' : a.uiCmd); } catch (_) {}
+      } else if (a.uiCmd === 'paste') {
+        navigator.clipboard?.readText?.().then(text => { if (!el || typeof text !== 'string') return; if (typeof el.setRangeText === 'function') { el.setRangeText(text); el.dispatchEvent(new Event('input', { bubbles: true })); } else document.execCommand('insertText', false, text); }).catch(() => {});
+      }
+    } else if (a.menu) {
       switch (a.menu) {
         case 'new-tab': openWebTab(); break;
         case 'new-window': ipc?.send('new-window', { incognito: false }); break;
