@@ -488,7 +488,8 @@ function addToHistory(url, title) {
   if (INCOGNITO || !url || url === 'about:blank' || matchesHistoryRule(url)) return;
   if (settingsStore.get('historyRetention') === 'session') return;
   const history = readHistory();
-  const newItem = { url, title: title || url, date: new Date().toISOString() };
+  const previous = history.find(item => item.url === url);
+  const newItem = { url, title: title || previous?.title || url, date: new Date().toISOString(), visits: (previous?.visits || 0) + 1 };
   const next = [newItem, ...history.filter((item) => item.url !== url)].slice(0, 1000);
   writeHistory(next);
   send('history-changed', settingsStore.get('historyLock') && !vault.isUnlocked() ? [] : next);
@@ -811,6 +812,25 @@ ipcMain.on('privacy-web-preferences', event => {
 
 // Renderer reports a navigation so we can persist history (skipped in incognito).
 ipcMain.on('add-history', (event, url, title) => addToHistory(url, title));
+
+ipcMain.handle('get-top-sites', () => {
+  const counts = new Map();
+  for (const item of readHistory()) {
+    try {
+      const parsed = new URL(item.url);
+      if (!/^https?:$/.test(parsed.protocol)) continue;
+      const key = parsed.origin;
+      const previous = counts.get(key) || { url: key, title: item.title || parsed.hostname, visits: 0, lastVisit: item.date || '' };
+      previous.visits += Math.max(1, Number(item.visits) || 1);
+      if ((item.date || '') > previous.lastVisit) {
+        previous.lastVisit = item.date || '';
+        previous.title = item.title || previous.title;
+      }
+      counts.set(key, previous);
+    } catch (_) {}
+  }
+  return [...counts.values()].sort((a, b) => b.visits - a.visits || b.lastVisit.localeCompare(a.lastVisit)).slice(0, 8);
+});
 
 // Renderer registers each new <webview>'s webContents id so we can attach
 // keyboard shortcuts for when focus is inside the page.
@@ -1322,6 +1342,48 @@ ipcMain.handle('import-browser-data', async () => {
   send('bookmark-folders-changed', folders);
   if (importedPasswords) void vault.sync().catch(() => {});
   return { canceled: false, bookmarks: importedBookmarks, passwords: importedPasswords };
+});
+
+function chromiumBookmarkFiles() {
+  const local = app.getPath('localAppData');
+  const roots = [
+    ['Google Chrome', path.join(local, 'Google', 'Chrome', 'User Data')],
+    ['Microsoft Edge', path.join(local, 'Microsoft', 'Edge', 'User Data')],
+    ['Brave', path.join(local, 'BraveSoftware', 'Brave-Browser', 'User Data')]
+  ];
+  const files = [];
+  for (const [browser, root] of roots) {
+    if (!fs.existsSync(root)) continue;
+    let profiles = [];
+    try { profiles = fs.readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory() && /^(Default|Profile \d+)$/.test(entry.name)); } catch (_) {}
+    for (const profile of profiles) {
+      const file = path.join(root, profile.name, 'Bookmarks');
+      if (fs.existsSync(file)) files.push({ browser, profile: profile.name, file });
+    }
+  }
+  return files;
+}
+
+ipcMain.handle('import-installed-browser-bookmarks', async () => {
+  if (!accountStore.get('account')) return { ok: false, requiresAccount: true, error: 'Connect your Tieddr Account first.' };
+  const sources = chromiumBookmarkFiles();
+  const existing = bookmarksStore.get('bookmarks') || [];
+  const byUrl = new Map(existing.map(item => [item.url, item]));
+  let imported = 0;
+  for (const source of sources) {
+    let parsed = [];
+    try { parsed = parseChromiumBookmarks(fs.readFileSync(source.file, 'utf8')); } catch (_) { continue; }
+    for (const item of parsed) {
+      if (!byUrl.has(item.url)) imported++;
+      byUrl.set(item.url, { ...item, source: 'imported', importedFrom: source.browser, date: new Date().toISOString() });
+    }
+  }
+  const bookmarks = [...byUrl.values()];
+  bookmarksStore.set('bookmarks', bookmarks);
+  bookmarksStore.set('folders', [...new Set(bookmarks.map(item => item.folder).filter(Boolean))]);
+  send('bookmarks-changed', bookmarks);
+  send('bookmark-folders-changed', bookmarksStore.get('folders') || []);
+  return { ok: true, imported, sources: [...new Set(sources.map(item => item.browser))] };
 });
 
 ipcMain.handle('should-block-url', (_event, url) => shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled));

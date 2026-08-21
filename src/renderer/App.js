@@ -284,7 +284,16 @@ function StartMini({ title, action, onAction, rows, icon: Icon, empty, go, isLig
 
 // Flowr's new tab is deliberately not an app launcher or a dashboard. Site
 // apps live in the side panel; this surface stays quiet and browser-first.
-function FlowrStart({ go, open, bookmarks, account, theme }) {
+const RECOMMENDED_SHORTCUTS = [
+  { title: 'YouTube', url: 'https://www.youtube.com' },
+  { title: 'WhatsApp', url: 'https://web.whatsapp.com' },
+  { title: 'Spotify', url: 'https://open.spotify.com' },
+  { title: 'Tieddr Space', url: 'https://space.tieddr.com' },
+  { title: 'Flowr Store', url: 'https://flowr.tieddr.com/store' },
+  { title: 'Mavis', url: 'https://mavis.tieddr.com' }
+];
+
+function FlowrStart({ go, open, bookmarks, account, theme, topSites }) {
   const [query, setQuery] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [news, setNews] = useState({ loading: true, items: [] });
@@ -297,6 +306,7 @@ function FlowrStart({ go, open, bookmarks, account, theme }) {
   const firstName = account?.name?.split(' ')[0] || '';
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const submit = () => { if (query.trim()) { go(query); setQuery(''); } };
+  const shortcuts = topSites?.length >= 4 ? topSites : RECOMMENDED_SHORTCUTS;
   return <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', background: light ? 'linear-gradient(145deg,#f6f5ee 0%,#ecefe4 100%)' : 'linear-gradient(145deg,#111411 0%,#080a09 100%)' }]}>
     <View pointerEvents="none" style={{ position: 'absolute', width: 520, height: 520, borderRadius: 260, right: -160, top: -210, borderWidth: 80, borderColor: theme.accentSoft, opacity: .42, transform: [{ rotate: '-18deg' }] }} />
     <View pointerEvents="none" style={{ position: 'absolute', width: 320, height: 480, borderRadius: 180, right: 50, top: -190, backgroundColor: theme.accentSoft, opacity: .2, transform: [{ rotate: '38deg' }] }} />
@@ -306,7 +316,7 @@ function FlowrStart({ go, open, bookmarks, account, theme }) {
       <Text style={{ color: softInk, fontSize: 13, fontWeight: '700', letterSpacing: .5 }}>{greeting}{firstName ? `, ${firstName}` : ''}</Text>
       <Text style={{ color: ink, fontSize: 76, lineHeight: 88, fontWeight: '300', letterSpacing: -4.5, marginTop: 3 }}>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
       <View style={{ width: '100%', maxWidth: 720, height: 58, borderRadius: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, gap: 12, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOpacity: light ? .08 : .28, shadowRadius: 28, shadowOffset: { width: 0, height: 14 } }} {...GLASS_HEAVY}><Search size={19} color={softInk} /><TextInput value={query} onChangeText={setQuery} onSubmitEditing={submit} placeholder="Search or enter an address" placeholderTextColor={softInk} autoCapitalize="none" style={{ flex: 1, color: ink, fontSize: 15, outlineStyle: 'none' }} />{query ? <TouchableOpacity onPress={submit} style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}><ArrowRight size={16} color={theme.onAccent} /></TouchableOpacity> : null}</View>
-      {bookmarks.length ? <View style={{ width: '100%', maxWidth: 720, flexDirection: 'row', justifyContent: 'center', gap: 9, marginTop: 22 }}>{bookmarks.slice(0, 6).map(item => <TouchableOpacity key={item.url} onPress={() => go(item.url)} style={{ width: 100, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 14 }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><SiteIcon url={item.url} favicon={item.favicon} theme={theme} size={17} /></View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 7, width: '100%', textAlign: 'center' }}>{item.title || host(item.url)}</Text></TouchableOpacity>)}</View> : null}
+      <View style={{ width: '100%', maxWidth: 720, marginTop: 22 }}><Text style={{ color: softInk, fontSize: 9.5, fontWeight: '850', letterSpacing: 1.25, textAlign: 'center', marginBottom: 7 }}>{topSites?.length >= 4 ? 'FREQUENTLY USED' : 'RECOMMENDED'}</Text><View style={{ flexDirection: 'row', justifyContent: 'center', gap: 9 }}>{shortcuts.slice(0, 6).map(item => <TouchableOpacity key={item.url} onPress={() => go(item.url)} style={{ width: 100, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 14 }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><SiteIcon url={item.url} favicon={item.favicon} theme={theme} size={17} /></View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 7, width: '100%', textAlign: 'center' }}>{item.title || host(item.url)}</Text></TouchableOpacity>)}</View></View>
     </View>
     <View style={{ position: 'absolute', left: 32, right: 32, bottom: 24, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 16, zIndex: 3 }}><TouchableOpacity onPress={() => open('bookmarks')} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Star size={14} color={softInk} /><Text style={{ color: softInk, fontSize: 11.5, fontWeight: '700' }}>Bookmarks</Text></TouchableOpacity><View style={{ width: 1, height: 18, backgroundColor: theme.border }} />{news.items?.[0] ? <TouchableOpacity onPress={() => go(news.items[0].url)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 }}><Text style={{ color: theme.accent, fontSize: 9.5, fontWeight: '850', letterSpacing: 1 }}>TIEDDR NEWS</Text><Text numberOfLines={1} style={{ flex: 1, color: softInk, fontSize: 11.5 }}>{news.items[0].title}</Text></TouchableOpacity> : <View style={{ flex: 1 }} />}<Text style={{ color: theme.faint, fontSize: 10.5 }}>A quiet place to begin.</Text></View>
   </View>;
@@ -1795,10 +1805,16 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       } catch (_) {}
     };
     const onFound = (e, result) => h().findResult(result);
-    const onFail = (e, errorCode, errorDescription, validatedURL) => {
-      if (e?.isMainFrame === false) return;
-      if (!validatedURL || validatedURL === 'about:blank' || errorCode === -3 || errorCode === -2) return;
-      h().navError(tab.id, validatedURL, errorDescription);
+    const onFail = (event, legacyCode, legacyDescription, legacyUrl) => {
+      const errorCode = event?.errorCode ?? legacyCode;
+      const errorDescription = event?.errorDescription || legacyDescription;
+      const validatedURL = event?.validatedURL || event?.url || legacyUrl || resolveUrl('', '');
+      if (event?.isMainFrame === false) return;
+      // ERR_ABORTED is expected when the user stops or replaces a navigation.
+      // All real main-frame failures, including DNS, offline, TLS and refused
+      // connections, must replace the broken guest surface with Flowr's page.
+      if (!validatedURL || validatedURL === 'about:blank' || errorCode === -3) return;
+      h().navError(tab.id, validatedURL, errorDescription || `Navigation failed (${errorCode})`, errorCode);
     };
     const onNewWin = async (e, url) => {
       e.preventDefault();
@@ -1827,6 +1843,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     wv.addEventListener('did-stop-loading', onStopLoad);
     wv.addEventListener('found-in-page', onFound);
     wv.addEventListener('did-fail-load', onFail);
+    wv.addEventListener('did-fail-provisional-load', onFail);
     wv.addEventListener('new-window', onNewWin);
     wv.addEventListener('dom-ready', onDomReady);
 
@@ -1841,6 +1858,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       wv.removeEventListener('did-stop-loading', onStopLoad);
       wv.removeEventListener('found-in-page', onFound);
       wv.removeEventListener('did-fail-load', onFail);
+      wv.removeEventListener('did-fail-provisional-load', onFail);
       wv.removeEventListener('new-window', onNewWin);
       wv.removeEventListener('dom-ready', onDomReady);
       try { webviewsRef.current.delete(tab.id); } catch (_) {}
@@ -1908,6 +1926,20 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme
   </View>;
 }
 
+function SideShortcutRail({ apps, active, onOpen, onClose, onMavis, theme }) {
+  const items = (apps?.length ? apps : DEFAULT_SITE_APPS).slice(0, 9);
+  return <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 52, zIndex: 8, alignItems: 'center', paddingTop: 10, gap: 7, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.chrome + 'f2' }} {...GLASS_HEAVY}>
+    {items.map(item => {
+      const selected = active?.open && active.extId === `site-app:${item.id || host(item.url)}`;
+      return <TouchableOpacity key={item.id || item.url} dataSet={HOVER} accessibilityLabel={item.name || host(item.url)} onPress={() => selected ? onClose() : onOpen(item)} style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.accentSoft : 'transparent', borderWidth: selected ? 1 : 0, borderColor: theme.accent }}>
+        {item.icon ? <Image source={{ uri: item.icon }} style={{ width: 22, height: 22, borderRadius: 6 }} /> : <SiteIcon url={item.url} theme={theme} size={20} />}
+      </TouchableOpacity>;
+    })}
+    <View style={{ flex: 1 }} />
+    <TouchableOpacity accessibilityLabel="Open Mavis" onPress={onMavis} style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 10, backgroundColor: active?.mavis ? theme.accentSoft : 'transparent' }}><Sparkles size={19} color={theme.accent} /></TouchableOpacity>
+  </View>;
+}
+
 function MavisPanel({ account, webContentsId, onSignIn, onClose, theme }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -1970,6 +2002,7 @@ export default function App() {
   const [settings, setSettings] = useState({ theme: 'flow', searchEngine: 'google', blockTrackers: true, defaultZoom: 1, accentColor: '', startBackground: 'none' });
   const [bookmarks, setBookmarks] = useState([]);
   const [history, setHistory] = useState([]);
+  const [topSites, setTopSites] = useState([]);
   const [downloads, setDownloads] = useState([]);
   const [profiles, setProfiles] = useState([{ id: 'default', name: 'Default' }]);
   const [activeProfile, setActiveProfile] = useState('default');
@@ -2089,14 +2122,15 @@ export default function App() {
 
   const load = useCallback(async () => {
     if (!ipc) return;
-    const [r, b, h, d, p, a, e, f, n, nf] = await Promise.all([
+    const [r, b, h, d, p, a, e, f, n, nf, ts] = await Promise.all([
       ipc.invoke('get-settings'), ipc.invoke('get-bookmarks'), ipc.invoke('get-history'),
       ipc.invoke('get-downloads'), ipc.invoke('get-profiles'), ipc.invoke('get-active-profile'),
       ipc.invoke('get-extensions'), ipc.invoke('get-bookmark-folders'),
-      ipc.invoke('get-notes'), ipc.invoke('get-note-folders')
+      ipc.invoke('get-notes'), ipc.invoke('get-note-folders'), ipc.invoke('get-top-sites')
     ]);
     setSettings(v => ({ ...v, ...r }));
     setBookmarks(b || []); setHistory(h || []); setDownloads(d || []);
+    setTopSites(ts || []);
     setProfiles(p || []); setActiveProfile(a || 'default'); setExtensions(e || []); setFolders(f || []);
     setNotes(n || []); setNoteFolders(nf || []);
     if (r?.onboardingCompleted !== true || r?.lastSeenVersion !== APP_VERSION) {
@@ -2499,6 +2533,7 @@ export default function App() {
     else if (a.sidePanelClose) setSidePanel({ open: false, extId: null, url: null });
     else if (a.dialog === 'clear-data') ipc.invoke('clear-browsing-data').then(load);
     else if (a.dialog === 'reset') ipc.invoke('reset-settings').then(d => setSettings(v => ({ ...v, ...d })));
+    else if (a.dialog === 'import-browser-data') importBrowserData();
     else if (a.dialog === 'pw-save') { const p = pendingPwRef.current; if (p) ipc.invoke('pw-save', p).then(x => setPasswords(x || [])); }
     else if (a.kind === 'dd-click') { ddCooldownRef.current = true; setTimeout(() => { ddCooldownRef.current = false; }, 600); go(a.url); }
     else if (a.kind === 'dd-ext-click') { const ext = extActsRef.current.find(e => e.id === a.id); if (ext) clickExt(ext); }
@@ -2544,7 +2579,7 @@ export default function App() {
       } else showDialog({ title: 'Extension could not be installed', message: result?.error || 'The extension package is invalid.' });
     },
     clearNavError: (id) => setTabs(items => items.map(item => item.id === id && item.error ? { ...item, error: null } : item)),
-    navError: (id, url, msg) => setTabs(items => items.map(item => item.id === id ? { ...item, loading: false, error: { url, message: msg || 'The page could not be reached.' } } : item))
+    navError: (id, url, msg, code) => setTabs(items => items.map(item => item.id === id ? { ...item, loading: false, error: { url, message: msg || 'The page could not be reached.', code } } : item))
   };
   useEffect(() => { handlersRef.current = handlers; });
 
@@ -2559,7 +2594,7 @@ export default function App() {
     ipc.invoke('get-view-preload').then(url => setPreloadUrl(url || '')).catch(() => setPreloadUrl(''));
     listen('request-new-tab', u => openWebTab(u));
     listen('downloads-changed', x => setDownloads(x || []));
-    listen('history-changed', x => setHistory(x || []));
+    listen('history-changed', x => { setHistory(x || []); ipc.invoke('get-top-sites').then(sites => setTopSites(sites || [])); });
     // Pushed by a background Tieddr Space sync (on sign-in, on startup if
     // already signed in, and every ~15 min) — not tied to a user action, so
     // it needs its own listener rather than piggybacking on load()'s explicit
@@ -2632,7 +2667,20 @@ export default function App() {
   const rmBookmark = async u => setBookmarks(await ipc.invoke('remove-bookmark', u));
   const moveBookmark = async (u, folder) => setBookmarks(await ipc.invoke('move-bookmark', u, folder));
   const createBookmarkFolder = async name => setFolders(await ipc.invoke('create-bookmark-folder', name));
-  const signIn = async () => { const a = await ipc.invoke('tieddr-sign-in'); setAccount(a || null); const v = await ipc.invoke('vault-state'); setVaultState(v || { linked: false, unlocked: false, hasVault: false }); };
+  const signIn = async () => {
+    const a = await ipc.invoke('tieddr-sign-in');
+    setAccount(a || null);
+    const v = await ipc.invoke('vault-state');
+    setVaultState(v || { linked: false, unlocked: false, hasVault: false });
+    if (!a) return;
+    const imported = await ipc.invoke('import-installed-browser-bookmarks');
+    if (imported?.ok) setBookmarks(await ipc.invoke('get-bookmarks') || []);
+    showDialog({
+      title: imported?.imported ? 'Your bookmarks are ready' : 'Bring your browser data to Flowr',
+      message: `${imported?.imported ? `${imported.imported} bookmarks were imported automatically from ${imported.sources.join(', ')}. ` : ''}Browsers protect saved passwords from silent access. Unlock Tieddr Vault, then choose your browser password export to encrypt and sync it safely.`,
+      actions: [{ label: 'Later', action: null }, { label: 'Import passwords', primary: true, action: { dialog: 'import-browser-data' } }]
+    });
+  };
   const signOut = async () => { setAccount(await ipc.invoke('tieddr-sign-out')); await ipc.invoke('vault-lock'); setVaultState({ linked: false, unlocked: false, hasVault: false }); setVaultItems([]); };
   const revealPw = (o, u) => ipc.invoke('pw-reveal', o, u);
   const copyPw = (o, u) => ipc.invoke('pw-copy', o, u);
@@ -2767,7 +2815,7 @@ export default function App() {
           <>
             {isStart ? (
               <View style={[s.startLayer, { backgroundColor: theme.bg }]}>
-                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} />
+                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} topSites={topSites} />
               </View>
             ) : (
               <View style={s.topBar}>
@@ -2777,10 +2825,10 @@ export default function App() {
             )}
             {tab.error ? <View style={[StyleSheet.absoluteFill, { zIndex: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg, padding: 40 }]}>
               <View style={{ width: 76, height: 76, borderRadius: 26, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Shield size={34} color={theme.accent} /></View>
-              <Text style={{ color: theme.text, fontSize: 27, fontWeight: '780', letterSpacing: -.8, marginTop: 22 }}>This page could not be reached</Text>
-              <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, textAlign: 'center', maxWidth: 520, marginTop: 10 }}>{host(tab.error.url) || 'The website'} did not respond. Check your connection, firewall, or the address and try again.{tab.error.message ? `\n${tab.error.message}` : ''}</Text>
+              <Text style={{ color: theme.text, fontSize: 27, fontWeight: '780', letterSpacing: -.8, marginTop: 22 }}>{tab.error.code <= -200 && tab.error.code >= -299 ? 'Your connection is not secure' : tab.error.code === -106 ? 'You are offline' : 'This page could not be reached'}</Text>
+              <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, textAlign: 'center', maxWidth: 520, marginTop: 10 }}>{tab.error.code <= -200 && tab.error.code >= -299 ? `Flowr could not verify the security certificate presented by ${host(tab.error.url) || 'this website'}. The page was stopped to protect your information.` : `${host(tab.error.url) || 'The website'} did not respond. Check your connection, firewall, or the address and try again.`}{tab.error.message ? `\n${tab.error.message}` : ''}</Text>
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}><TouchableOpacity style={[s.primary, { backgroundColor: theme.accent }]} onPress={() => { handlers.clearNavError(tab.id); reload(); }}><RefreshCw size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Try again</Text></TouchableOpacity><TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={() => go('about:blank')}><Home size={16} color={theme.text} /><Text style={[s.actionText, { color: theme.text }]}>New tab</Text></TouchableOpacity></View>
-              <Text style={{ color: theme.faint, fontSize: 11, marginTop: 18 }}>FLOWR_NETWORK_ERROR</Text>
+              <Text style={{ color: theme.faint, fontSize: 11, marginTop: 18 }}>{tab.error.code <= -200 && tab.error.code >= -299 ? 'FLOWR_CERTIFICATE_ERROR' : `FLOWR_NETWORK_ERROR${tab.error.code ? ` · ${tab.error.code}` : ''}`}</Text>
             </View> : null}
           </>
         ) : null}
@@ -2791,7 +2839,8 @@ export default function App() {
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}
-        {sidePanel.open ? <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: sidePanel.width || 420, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.panel }}>{sidePanel.mavis ? <MavisPanel account={account} webContentsId={activeWebview()?.getWebContentsId?.()} onSignIn={signIn} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} />}</View> : null}
+        {sidePanel.open ? <View style={{ position: 'absolute', top: 0, bottom: 0, right: 52, width: sidePanel.width || 420, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.panel }}>{sidePanel.mavis ? <MavisPanel account={account} webContentsId={activeWebview()?.getWebContentsId?.()} onSignIn={signIn} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} />}</View> : null}
+        <SideShortcutRail apps={[...DEFAULT_SITE_APPS, ...(Array.isArray(settings.siteApps) ? settings.siteApps : [])].filter((item, index, list) => list.findIndex(other => other.id === item.id) === index)} active={sidePanel} onOpen={openSiteApp} onClose={() => setSidePanel({ open: false, extId: null })} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} theme={theme} />
         {activeDownload ? <TouchableOpacity onPress={() => openPage('downloads')} style={{ position: 'absolute', right: sidePanel.open ? 420 : 16, top: 14, zIndex: 60, width: 286, minHeight: 58, padding: 11, borderRadius: 15, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'f2', shadowColor: '#000', shadowOpacity: .24, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }} {...GLASS_HEAVY}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Download size={17} color={theme.accent} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }} numberOfLines={1}>{activeDownload.filename}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{activeDownload.state === 'paused' ? 'Paused' : `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 0}% · Open downloads`}</Text></View><ChevronRight size={15} color={theme.faint} /></View>
           <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden', marginTop: 9 }}><View style={{ height: '100%', width: `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 4}%`, backgroundColor: theme.accent }} /></View>
