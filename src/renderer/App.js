@@ -282,6 +282,36 @@ function StartMini({ title, action, onAction, rows, icon: Icon, empty, go, isLig
   );
 }
 
+// Flowr's new tab is deliberately not an app launcher or a dashboard. Site
+// apps live in the side panel; this surface stays quiet and browser-first.
+function FlowrStart({ go, open, bookmarks, account, theme }) {
+  const [query, setQuery] = useState('');
+  const [now, setNow] = useState(() => new Date());
+  const [news, setNews] = useState({ loading: true, items: [] });
+  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 20000); return () => clearInterval(timer); }, []);
+  useEffect(() => { ipc?.invoke('get-tieddr-news').then(result => setNews({ loading: false, ...(result || { ok: false, items: [] }) })); }, []);
+  const light = ['aurora', 'linen'].includes(theme.id);
+  const ink = light ? '#151712' : '#f5f6f1';
+  const softInk = light ? '#666b5e' : '#969d90';
+  const glass = light ? 'rgba(255,255,252,.72)' : 'rgba(21,24,21,.72)';
+  const firstName = account?.name?.split(' ')[0] || '';
+  const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const submit = () => { if (query.trim()) { go(query); setQuery(''); } };
+  return <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', background: light ? 'linear-gradient(145deg,#f6f5ee 0%,#ecefe4 100%)' : 'linear-gradient(145deg,#111411 0%,#080a09 100%)' }]}>
+    <View pointerEvents="none" style={{ position: 'absolute', width: 520, height: 520, borderRadius: 260, right: -160, top: -210, borderWidth: 80, borderColor: theme.accentSoft, opacity: .42, transform: [{ rotate: '-18deg' }] }} />
+    <View pointerEvents="none" style={{ position: 'absolute', width: 320, height: 480, borderRadius: 180, right: 50, top: -190, backgroundColor: theme.accentSoft, opacity: .2, transform: [{ rotate: '38deg' }] }} />
+    <View pointerEvents="none" style={{ position: 'absolute', width: 280, height: 420, borderRadius: 160, right: -80, top: 80, backgroundColor: theme.accentSoft, opacity: .16, transform: [{ rotate: '-48deg' }] }} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 34, paddingTop: 28, zIndex: 2 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Brand size={28} radius={9} /><Text style={{ color: ink, fontSize: 12, fontWeight: '850', letterSpacing: 1.7 }}>FLOWR</Text></View><Text style={{ color: softInk, fontSize: 11.5, fontWeight: '650' }}>{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</Text></View>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 34, paddingBottom: 84, zIndex: 2 }}>
+      <Text style={{ color: softInk, fontSize: 13, fontWeight: '700', letterSpacing: .5 }}>{greeting}{firstName ? `, ${firstName}` : ''}</Text>
+      <Text style={{ color: ink, fontSize: 76, lineHeight: 88, fontWeight: '300', letterSpacing: -4.5, marginTop: 3 }}>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+      <View style={{ width: '100%', maxWidth: 720, height: 58, borderRadius: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, gap: 12, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOpacity: light ? .08 : .28, shadowRadius: 28, shadowOffset: { width: 0, height: 14 } }} {...GLASS_HEAVY}><Search size={19} color={softInk} /><TextInput value={query} onChangeText={setQuery} onSubmitEditing={submit} placeholder="Search or enter an address" placeholderTextColor={softInk} autoCapitalize="none" style={{ flex: 1, color: ink, fontSize: 15, outlineStyle: 'none' }} />{query ? <TouchableOpacity onPress={submit} style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}><ArrowRight size={16} color={theme.onAccent} /></TouchableOpacity> : null}</View>
+      {bookmarks.length ? <View style={{ width: '100%', maxWidth: 720, flexDirection: 'row', justifyContent: 'center', gap: 9, marginTop: 22 }}>{bookmarks.slice(0, 6).map(item => <TouchableOpacity key={item.url} onPress={() => go(item.url)} style={{ width: 100, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 14 }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><SiteIcon url={item.url} favicon={item.favicon} theme={theme} size={17} /></View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 7, width: '100%', textAlign: 'center' }}>{item.title || host(item.url)}</Text></TouchableOpacity>)}</View> : null}
+    </View>
+    <View style={{ position: 'absolute', left: 32, right: 32, bottom: 24, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 16, zIndex: 3 }}><TouchableOpacity onPress={() => open('bookmarks')} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Star size={14} color={softInk} /><Text style={{ color: softInk, fontSize: 11.5, fontWeight: '700' }}>Bookmarks</Text></TouchableOpacity><View style={{ width: 1, height: 18, backgroundColor: theme.border }} />{news.items?.[0] ? <TouchableOpacity onPress={() => go(news.items[0].url)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 }}><Text style={{ color: theme.accent, fontSize: 9.5, fontWeight: '850', letterSpacing: 1 }}>TIEDDR NEWS</Text><Text numberOfLines={1} style={{ flex: 1, color: softInk, fontSize: 11.5 }}>{news.items[0].title}</Text></TouchableOpacity> : <View style={{ flex: 1 }} />}<Text style={{ color: theme.faint, fontSize: 10.5 }}>A quiet place to begin.</Text></View>
+  </View>;
+}
+
 // Adaptive tabs: each flexes to share the bar and shrinks as more open. Tabs
 // spring in on open and can be dragged to reorder (lift + live shuffle).
 function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, onTabMenu, onTabPeek, incognito, account, closingTabs, theme }) {
@@ -296,6 +326,13 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
+    const onMenu = (event) => {
+      const tabEl = event.target.closest?.('[data-tabid]');
+      if (!tabEl) return;
+      event.preventDefault(); event.stopPropagation();
+      const target = tabs.find(item => item.id === Number(tabEl.getAttribute('data-tabid')));
+      if (target) { setPeek(null); onTabMenu?.(target, event.clientX, event.clientY); }
+    };
     const onDown = (e) => {
       if (e.button !== 0) return;
       const tabEl = e.target.closest?.('[data-tabid]');
@@ -325,8 +362,9 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
       window.addEventListener('mouseup', up);
     };
     strip.addEventListener('mousedown', onDown);
-    return () => strip.removeEventListener('mousedown', onDown);
-  }, [tabs, onReorder, onGroupTabs]);
+    strip.addEventListener('contextmenu', onMenu, true);
+    return () => { strip.removeEventListener('mousedown', onDown); strip.removeEventListener('contextmenu', onMenu, true); };
+  }, [tabs, onReorder, onGroupTabs, onTabMenu]);
   useEffect(() => () => clearTimeout(peekTimer.current), []);
 
   return (
@@ -352,7 +390,6 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
                 t.groupId && { borderTopWidth: 2, borderTopColor: t.groupColor || theme.accent },
                 dragging && { transform: [{ translateX: drag.dx }, { scale: 1.04 }], zIndex: 6, backgroundColor: theme.strong, borderColor: theme.accent, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }]}
               onPress={() => { if (suppress.current) return; onSwitch(t.id); }}
-              onContextMenu={e => { e.preventDefault?.(); e.stopPropagation?.(); setPeek(null); onTabMenu?.(t, e.clientX, e.clientY); }}
               onMouseEnter={() => { clearTimeout(peekTimer.current); peekTimer.current = setTimeout(async () => { setPeek(t.id); setPeekImage(await onTabPeek?.(t.id) || ''); }, 520); }} onMouseLeave={() => { clearTimeout(peekTimer.current); setPeek(null); setPeekImage(''); }}>
               {t.groupId ? <View title={t.groupLabel || 'Tab group'} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.groupColor || theme.accent, flexShrink: 0 }} /> : null}
               {t.loading ? <View dataSet={{ spin: '1' }} style={s.spin}><RotateCcw size={13} color={theme.accent} /></View>
@@ -945,7 +982,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
             </Card>
           )}
           <Card title="Import browser data" icon={Upload} theme={theme}>
-            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Import bookmark HTML or Chromium bookmark JSON. Export passwords as CSV from Chrome, Edge, Firefox, Brave, or another browser, then unlock Vault before importing.</Text>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Import bookmark HTML or a supported browser bookmark export. Export passwords as CSV from your current browser, then unlock Vault before importing.</Text>
             <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={onImport}><FolderInput size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Choose browser export files</Text></TouchableOpacity>
           </Card>
           <Card title="Tieddr ecosystem" icon={LayoutGrid} theme={theme}>
@@ -1239,7 +1276,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
           <Card title="Release notes" icon={BookOpen} theme={theme}>
             <Text style={[s.rs, { color: theme.muted, lineHeight: 19 }]}>See what's new in Flowr Browser.</Text>
             <InfoRow label="Current version" value={APP_VERSION} theme={theme} />
-            <InfoRow label="Engine" value="Electron 43 · Chromium 134" theme={theme} />
+            <InfoRow label="Web compatibility" value="Flowr Web Engine" theme={theme} />
             <InfoRow label="Release date" value="August 2026" theme={theme} />
           </Card>
         </>);
@@ -1265,7 +1302,7 @@ function SettingsPage({ settings, profiles, active, update, createProfile, switc
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.rt, { color: theme.text, fontSize: 18 }]}>Flowr Browser</Text>
                 <Text style={[s.rs, { color: theme.muted }]}>Version {APP_VERSION}</Text>
-                <Text style={[s.rs, { color: theme.faint, marginTop: 6, lineHeight: 18 }]}>A calm, premium browser built on Electron. Part of the Tieddr ecosystem.</Text>
+                <Text style={[s.rs, { color: theme.faint, marginTop: 6, lineHeight: 18 }]}>A calm, private browser from Tieddr.</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
@@ -2712,7 +2749,7 @@ export default function App() {
           <>
             {isStart ? (
               <View style={[s.startLayer, { backgroundColor: theme.bg }]}>
-                <Start go={go} open={openPage} bookmarks={bookmarks} account={account} settings={settings} theme={theme} apps={siteApps} openApp={openSiteApp} />
+                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} />
               </View>
             ) : (
               <View style={s.topBar}>
