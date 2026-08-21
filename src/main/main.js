@@ -638,7 +638,7 @@ function createWindow() {
 
   // Custom-skinned context menu for the app UI (address bar, etc.).
   mainWindow.webContents.on('context-menu', (event, params) => {
-    send('show-context-menu', { ...contextParams(params), ui: true, image: null });
+    send('show-context-menu', { ...contextParams(params), webContentsId: mainWindow.webContents.id, ui: true, image: null });
   });
 
   // Reveal the window only once it has painted, then pull it to the front.
@@ -922,6 +922,7 @@ ipcMain.on('new-window', (event, opts) => {
 });
 
 ipcMain.handle('get-incognito', () => INCOGNITO);
+ipcMain.handle('get-clipboard-text', () => clipboard.readText());
 
 // --- Password manager (backed by the Tieddr Vault when unlocked) ----------
 // When the vault is unlocked it's the source of truth — synced across every

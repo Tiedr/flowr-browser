@@ -321,6 +321,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
   const suppress = useRef(false);
   const [peek, setPeek] = useState(null);
   const [peekImage, setPeekImage] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const peekTimer = useRef(null);
 
   useEffect(() => {
@@ -379,7 +380,13 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
             ) : null}
           </View>
       }<View ref={stripRef} style={s.tstrip}>
+        {Array.from(new Map(tabs.filter(tab => tab.groupId).map(tab => [tab.groupId, tab])).values()).map(group => {
+          const members = tabs.filter(tab => tab.groupId === group.groupId);
+          const collapsed = collapsedGroups.has(group.groupId);
+          return <TouchableOpacity key={`group-control-${group.groupId}`} dataSet={HOVER} title={collapsed ? `Expand ${group.groupLabel || 'group'}` : `Collapse ${group.groupLabel || 'group'}`} onPress={() => setCollapsedGroups(current => { const next = new Set(current); if (next.has(group.groupId)) next.delete(group.groupId); else next.add(group.groupId); return next; })} style={{ height: 30, minWidth: 42, maxWidth: 142, paddingHorizontal: 10, borderRadius: 10, marginRight: 4, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: collapsed ? (group.groupColor || theme.accent) : theme.soft, borderWidth: 1, borderColor: group.groupColor || theme.accent }}><ChevronRight size={12} color={collapsed ? theme.onAccent : (group.groupColor || theme.accent)} style={{ transform: [{ rotate: collapsed ? '0deg' : '90deg' }] }} /><Text numberOfLines={1} style={{ color: collapsed ? theme.onAccent : theme.text, fontSize: 10.5, fontWeight: '800', maxWidth: 78 }}>{group.groupLabel || 'Group'}</Text><View style={{ minWidth: 17, height: 17, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: collapsed ? 'rgba(0,0,0,.18)' : theme.border }}><Text style={{ color: collapsed ? theme.onAccent : theme.muted, fontSize: 9, fontWeight: '800' }}>{members.length}</Text></View></TouchableOpacity>;
+        })}
         {tabs.map(t => {
+          if (t.groupId && collapsedGroups.has(t.groupId)) return null;
           const a = t.id === active;
           const dragging = drag && drag.id === t.id;
           const page = t.kind !== 'web' ? PAGES[t.kind] : null;
@@ -1666,8 +1673,9 @@ function rectOf(el) {
   catch (_) { return { left: 0, top: 0 }; }
 }
 
-const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
+const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'full', onActivate, preloadUrl, incognito, webviewsRef, handlersRef, contentRef }) {
   const hostRef = useRef(null);
+  const activateRef = useRef(onActivate); activateRef.current = onActivate;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1848,6 +1856,14 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
     }
   }, [active]);
 
+  useEffect(() => {
+    const wv = hostRef.current?.firstChild;
+    if (!wv) return undefined;
+    const focused = () => activateRef.current?.();
+    wv.addEventListener('focus', focused);
+    return () => wv.removeEventListener('focus', focused);
+  }, [tab.id]);
+
   const prevUrlRef = useRef(tab.url);
   useEffect(() => {
     const host = hostRef.current;
@@ -1866,7 +1882,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
   }, [preloadUrl]);
 
   const splitStyle = layout === 'left' ? { left: 0, right: '50%', width: '50%' } : layout === 'right' ? { left: '50%', right: 0, width: '50%', borderLeft: '1px solid rgba(128,128,128,.28)' } : { left: 0, right: 0, width: '100%' };
-  return <div ref={hostRef} style={{ position: 'absolute', top: 0, bottom: 0, ...splitStyle, height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none' }} />;
+  return <div ref={hostRef} onMouseDown={onActivate} style={{ position: 'absolute', top: 0, bottom: 0, ...splitStyle, height: '100%', overflow: 'hidden', background: '#ffffff', pointerEvents: active ? 'auto' : 'none', boxShadow: layout === 'right' ? '-1px 0 0 rgba(128,128,128,.35)' : 'none' }} />;
 });
 
 function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme }) {
@@ -2394,6 +2410,7 @@ export default function App() {
       items.push({ label: 'Cut', icon: 'Scissors', disabled: !p.editFlags?.canCut, action: { cmd: 'cut' } });
       items.push({ label: 'Copy', icon: 'Copy', disabled: !p.editFlags?.canCopy, action: { cmd: 'copy' } });
       items.push({ label: 'Paste', icon: 'ClipboardPaste', disabled: !p.editFlags?.canPaste, action: { cmd: 'paste' } });
+      if (p.ui) items.push({ label: 'Paste and go', icon: 'ArrowRight', action: { pasteAndGo: true } });
       items.push({ label: 'Select all', icon: 'TextCursorInput', action: { cmd: 'selectAll' } });
     } else {
       if (p.linkURL) { items.push({ label: 'Open link in new tab', icon: 'ExternalLink', action: { open: p.linkURL } }); items.push({ label: 'Copy link address', icon: 'Copy', action: { cmd: 'copyText', arg: p.linkURL } }); sep(); }
@@ -2475,6 +2492,7 @@ export default function App() {
       else if (a.tab === 'new-right') { const id = openWebTab(); setTabs(items => { const from = items.findIndex(item => item.id === id); const at = items.findIndex(item => item.id === a.id); if (from < 0 || at < 0) return items; const next = items.slice(); const [created] = next.splice(from, 1); next.splice(at + 1, 0, created); return next; }); }
     }
     else if (a.open) openWebTab(a.open);
+    else if (a.pasteAndGo) ipc?.invoke('get-clipboard-text').then(text => { if (text?.trim()) go(text.trim()); });
     else if (a.search) openWebTab(urlOf(a.search, settingsRef.current));
     else if (a.ext) ipc?.send('open-extension-popup', a.ext);
     else if (a.sidePanel) setSidePanel({ open: true, extId: a.sidePanel.extId, url: a.sidePanel.url, width: 400, incognito });
@@ -2743,7 +2761,7 @@ export default function App() {
       )}
       <View style={[s.content, { height: 'calc(100vh - ' + viewTop + 'px)' }]} ref={contentRef}>
         {tabs.filter(t => t.kind === 'web' && t.url && t.url !== 'about:blank' && !t.discarded).map(t => (
-          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
+          <WebviewHost key={t.id} tab={t} active={isWeb && (t.id === activeId || t.id === splitTabId)} layout={splitTabId && isWeb ? (t.id === activeId ? 'left' : t.id === splitTabId ? 'right' : 'full') : 'full'} onActivate={() => { if (splitTabId && t.id === splitTabId && t.id !== activeId) { setSplitTabId(activeId); setActiveId(t.id); } }} preloadUrl={preloadUrl} incognito={incognito} webviewsRef={webviewsRef} handlersRef={handlersRef} contentRef={contentRef} />
         ))}
         {isWeb ? (
           <>
