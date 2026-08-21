@@ -284,12 +284,13 @@ function StartMini({ title, action, onAction, rows, icon: Icon, empty, go, isLig
 
 // Adaptive tabs: each flexes to share the bar and shrinks as more open. Tabs
 // spring in on open and can be dragged to reorder (lift + live shuffle).
-function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, onTabMenu, incognito, account, closingTabs, theme }) {
+function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, onTabMenu, onTabPeek, incognito, account, closingTabs, theme }) {
   const stripRef = useRef(null);
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
   const suppress = useRef(false);
   const [peek, setPeek] = useState(null);
+  const [peekImage, setPeekImage] = useState('');
   const peekTimer = useRef(null);
 
   useEffect(() => {
@@ -352,7 +353,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
                 dragging && { transform: [{ translateX: drag.dx }, { scale: 1.04 }], zIndex: 6, backgroundColor: theme.strong, borderColor: theme.accent, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }]}
               onPress={() => { if (suppress.current) return; onSwitch(t.id); }}
               onContextMenu={e => { e.preventDefault?.(); e.stopPropagation?.(); setPeek(null); onTabMenu?.(t, e.clientX, e.clientY); }}
-              onMouseEnter={() => { clearTimeout(peekTimer.current); peekTimer.current = setTimeout(() => setPeek(t.id), 520); }} onMouseLeave={() => { clearTimeout(peekTimer.current); setPeek(null); }}>
+              onMouseEnter={() => { clearTimeout(peekTimer.current); peekTimer.current = setTimeout(async () => { setPeek(t.id); setPeekImage(await onTabPeek?.(t.id) || ''); }, 520); }} onMouseLeave={() => { clearTimeout(peekTimer.current); setPeek(null); setPeekImage(''); }}>
               {t.groupId ? <View title={t.groupLabel || 'Tab group'} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: t.groupColor || theme.accent, flexShrink: 0 }} /> : null}
               {t.loading ? <View dataSet={{ spin: '1' }} style={s.spin}><RotateCcw size={13} color={theme.accent} /></View>
                 : page ? <PageIcon size={14} color={a ? theme.accent : theme.faint} />
@@ -360,7 +361,7 @@ function Tabs({ tabs, active, onSwitch, onClose, onNew, onReorder, onGroupTabs, 
                     : <Globe size={14} color={a ? theme.accent : theme.faint} />}
               <Text style={[s.tt, { color: a ? theme.text : theme.muted }]} numberOfLines={1}>{page ? page.title : (t.title || host(t.url))}</Text>
               <TouchableOpacity dataSet={{ tabclose: '1', ...HOVER }} style={[s.close, T_BG]} onPress={e => { e.stopPropagation?.(); onClose(t.id); }}><X size={12} color={a ? theme.muted : theme.faint} /></TouchableOpacity>
-              {peek === t.id ? <View pointerEvents="none" style={{ position: 'absolute', top: 38, left: 0, width: 292, minHeight: 112, zIndex: 1200, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'fa', shadowColor: '#000', shadowOpacity: .3, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } }} {...GLASS_HEAVY}><View style={{ height: 48, borderRadius: 9, background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.soft})`, alignItems: 'center', justifyContent: 'center' }}>{t.favicon ? <Image source={{ uri: t.favicon }} style={{ width: 26, height: 26, borderRadius: 6 }} /> : <Globe size={24} color={theme.accent} />}</View><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700', marginTop: 10 }} numberOfLines={1}>{t.title || host(t.url)}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }} numberOfLines={1}>{t.url === 'about:blank' ? 'New tab' : t.url}</Text></View> : null}
+              {peek === t.id ? <View pointerEvents="none" style={{ position: 'absolute', top: 38, left: 0, width: 316, minHeight: 174, zIndex: 1200, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'fa', shadowColor: '#000', shadowOpacity: .3, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } }} {...GLASS_HEAVY}><View style={{ height: 112, borderRadius: 9, overflow: 'hidden', background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.soft})`, alignItems: 'center', justifyContent: 'center' }}>{peekImage ? <Image source={{ uri: peekImage }} resizeMode="cover" style={{ width: '100%', height: '100%' }} /> : t.favicon ? <Image source={{ uri: t.favicon }} style={{ width: 28, height: 28, borderRadius: 7 }} /> : <Globe size={24} color={theme.accent} />}</View><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700', marginTop: 10 }} numberOfLines={1}>{t.title || host(t.url)}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }} numberOfLines={1}>{t.url === 'about:blank' ? 'New tab' : t.url}</Text></View> : null}
             </TouchableOpacity>
           );
         })}
@@ -1854,6 +1855,44 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme
   </View>;
 }
 
+function MavisPanel({ account, webContentsId, onSignIn, onClose, theme }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const mavisIcon = TIEDDR_APPS.find(app => app.name === 'Mavis')?.icon;
+  const send = async () => {
+    const question = input.trim(); if (!question || busy || !account) return;
+    const history = messages.map(item => ({ role: item.role, text: item.text })).slice(-12);
+    setMessages(current => current.concat({ role: 'user', text: question })); setInput(''); setBusy(true);
+    const result = await ipc?.invoke('mavis-chat', { input: question, history, webContentsId });
+    setMessages(current => current.concat({ role: 'mavis', text: result?.ok ? (result.text || result.answer || 'I finished, but there was no text response.') : (result?.error || 'Mavis is unavailable right now.') }));
+    setBusy(false);
+  };
+  return <View style={{ position: 'absolute', inset: 0, backgroundColor: theme.panel }}>
+    <View style={{ height: 56, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.border }}><View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}>{mavisIcon ? <Image source={{ uri: mavisIcon }} style={{ width: 27, height: 27, borderRadius: 8 }} /> : <Sparkles size={18} color={theme.accent} />}</View><View style={{ flex: 1, marginLeft: 10 }}><Text style={{ color: theme.text, fontSize: 14, fontWeight: '800' }}>Mavis</Text><Text style={{ color: theme.muted, fontSize: 10.5 }}>Tieddr assistant · page aware</Text></View><I icon={X} label="Close Mavis" onPress={onClose} theme={theme} /></View>
+    {!account ? <View style={{ flex: 1, padding: 28, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 72, height: 72, borderRadius: 26, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}>{mavisIcon ? <Image source={{ uri: mavisIcon }} style={{ width: 54, height: 54, borderRadius: 16 }} /> : <Sparkles size={28} color={theme.accent} />}</View><Text style={{ color: theme.text, fontSize: 22, fontWeight: '780', marginTop: 18 }}>Meet Mavis</Text><Text style={{ color: theme.muted, fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 8 }}>Connect your Tieddr Account to ask about the page, summarize content, and work across your Tieddr Space.</Text><TouchableOpacity onPress={onSignIn} style={[s.primary, { marginTop: 22, backgroundColor: theme.accent }]}><LogIn size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Connect Tieddr Account</Text></TouchableOpacity></View> : <>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 15, gap: 11 }}>
+        {!messages.length ? <View style={{ paddingVertical: 40, alignItems: 'center' }}><Text style={{ color: theme.text, fontSize: 18, fontWeight: '750' }}>What can I help with?</Text><Text style={{ color: theme.muted, fontSize: 12.5, lineHeight: 19, textAlign: 'center', marginTop: 7 }}>Ask about this page or anything saved in your Tieddr workspace.</Text>{['Summarize this page', 'What are the key points?', 'Help me understand this'].map(prompt => <TouchableOpacity key={prompt} onPress={() => setInput(prompt)} style={{ width: '100%', padding: 12, marginTop: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.soft }}><Text style={{ color: theme.text, fontSize: 12.5 }}>{prompt}</Text></TouchableOpacity>)}</View> : null}
+        {messages.map((item, index) => <View key={index} style={{ alignSelf: item.role === 'user' ? 'flex-end' : 'stretch', maxWidth: item.role === 'user' ? '84%' : '100%', padding: 12, borderRadius: 15, backgroundColor: item.role === 'user' ? theme.accent : theme.soft, borderWidth: item.role === 'mavis' ? 1 : 0, borderColor: theme.border }}><Text style={{ color: item.role === 'user' ? theme.onAccent : theme.text, fontSize: 13, lineHeight: 19 }}>{item.text}</Text></View>)}
+        {busy ? <View style={{ alignSelf: 'flex-start', padding: 12, borderRadius: 15, backgroundColor: theme.soft }}><Text style={{ color: theme.muted, fontSize: 12 }}>Mavis is thinking…</Text></View> : null}
+      </ScrollView>
+      <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: theme.border }}><View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 7, borderRadius: 16, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.soft }}><TextInput multiline value={input} onChangeText={setInput} placeholder="Ask Mavis about this page…" placeholderTextColor={theme.faint} style={{ flex: 1, maxHeight: 110, minHeight: 36, paddingHorizontal: 8, paddingVertical: 8, color: theme.text, outlineStyle: 'none', fontSize: 13 }} onKeyPress={event => { if (event.nativeEvent?.key === 'Enter' && !event.nativeEvent?.shiftKey) { event.preventDefault?.(); send(); } }} /><TouchableOpacity disabled={!input.trim() || busy} onPress={send} style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: input.trim() && !busy ? theme.accent : theme.border }}><ArrowRight size={17} color={input.trim() && !busy ? theme.onAccent : theme.faint} /></TouchableOpacity></View><Text style={{ color: theme.faint, fontSize: 9.5, textAlign: 'center', marginTop: 7 }}>Mavis can read visible page content only when you ask.</Text></View>
+    </>}
+  </View>;
+}
+
+function PrintPreview({ state, onChange, onRefresh, onPrint, onClose, theme }) {
+  return <View style={[StyleSheet.absoluteFill, { zIndex: 1700, backgroundColor: theme.bg, flexDirection: 'row' }]}>
+    <View style={{ width: 330, padding: 22, backgroundColor: theme.panel, borderRightWidth: 1, borderRightColor: theme.border }}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Text style={{ color: theme.text, fontSize: 22, fontWeight: '780' }}>Print</Text><I icon={X} label="Close print preview" onPress={onClose} theme={theme} /></View><Text style={{ color: theme.muted, fontSize: 12.5, lineHeight: 19, marginTop: 6 }}>Preview and prepare this page before opening the system printer.</Text>
+      <Text style={{ color: theme.faint, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2, marginTop: 28, marginBottom: 8 }}>LAYOUT</Text><View style={{ flexDirection: 'row', gap: 8 }}>{['portrait', 'landscape'].map(value => <TouchableOpacity key={value} onPress={() => onChange({ landscape: value === 'landscape' })} style={{ flex: 1, padding: 11, borderRadius: 11, borderWidth: 1, borderColor: state.landscape === (value === 'landscape') ? theme.accent : theme.border, backgroundColor: state.landscape === (value === 'landscape') ? theme.accentSoft : theme.soft }}><Text style={{ color: theme.text, fontSize: 12, fontWeight: '650', textTransform: 'capitalize', textAlign: 'center' }}>{value}</Text></TouchableOpacity>)}</View>
+      <Text style={{ color: theme.faint, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2, marginTop: 22, marginBottom: 8 }}>PAPER</Text><View style={{ flexDirection: 'row', gap: 8 }}>{['A4', 'Letter'].map(value => <TouchableOpacity key={value} onPress={() => onChange({ pageSize: value })} style={{ flex: 1, padding: 11, borderRadius: 11, borderWidth: 1, borderColor: state.pageSize === value ? theme.accent : theme.border, backgroundColor: state.pageSize === value ? theme.accentSoft : theme.soft }}><Text style={{ color: theme.text, fontSize: 12, fontWeight: '650', textAlign: 'center' }}>{value}</Text></TouchableOpacity>)}</View>
+      <TouchableOpacity onPress={() => onChange({ printBackground: !state.printBackground })} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border }}><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '650' }}>Background graphics</Text><View style={{ width: 38, height: 21, borderRadius: 11, backgroundColor: state.printBackground ? theme.accent : theme.border, padding: 2 }}><View style={{ width: 17, height: 17, borderRadius: 9, backgroundColor: state.printBackground ? theme.onAccent : theme.faint, transform: [{ translateX: state.printBackground ? 17 : 0 }] }} /></View></TouchableOpacity>
+      <View style={{ flex: 1 }} /><TouchableOpacity onPress={onPrint} style={[s.primary, { width: '100%', justifyContent: 'center', backgroundColor: theme.accent }]}><Text style={[s.primaryText, { color: theme.onAccent }]}>Print…</Text></TouchableOpacity>
+    </View>
+    <View style={{ flex: 1, backgroundColor: theme.soft, padding: 24 }}>{state.loading ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: theme.muted }}>Preparing preview…</Text></View> : state.error ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>Preview unavailable</Text><Text style={{ color: theme.muted, marginTop: 8 }}>{state.error}</Text><TouchableOpacity onPress={onRefresh} style={[s.action, { marginTop: 18, backgroundColor: theme.panel, borderColor: theme.border }]}><RefreshCw size={15} color={theme.text} /><Text style={[s.actionText, { color: theme.text }]}>Try again</Text></TouchableOpacity></View> : <iframe title="Print preview" src={state.dataUrl} style={{ width: '100%', height: '100%', border: 0, borderRadius: 14, background: '#dfe2e7', boxShadow: '0 18px 50px rgba(0,0,0,.22)' }} />}</View>
+  </View>;
+}
+
 // Dropdown position helpers (used by App's full-screen dropdown layer)
 const getDropdownPos = (urlWrapRef) => {
   const el = urlWrapRef?.current;
@@ -1896,6 +1935,7 @@ export default function App() {
   const [vaultItems, setVaultItems] = useState([]);
   const [closingTabs, setClosingTabs] = useState(new Set());
   const [sidePanel, setSidePanel] = useState({ open: false, extId: null });
+  const [printPreview, setPrintPreview] = useState(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [splitTabId, setSplitTabId] = useState(null);
@@ -2124,6 +2164,21 @@ export default function App() {
   }, []);
 
   const activeWebview = useCallback(() => webviewsRef.current.get(activeIdRef.current), []);
+  const refreshPrintPreview = useCallback(async (nextOptions) => {
+    setPrintPreview(current => current ? { ...current, ...(nextOptions || {}), loading: true, error: '' } : current);
+    const current = printPreview;
+    if (!current) return;
+    const options = { ...current, ...(nextOptions || {}) };
+    const result = await ipc?.invoke('create-print-preview', current.webContentsId, options);
+    setPrintPreview(value => value ? { ...value, loading: false, dataUrl: result?.ok ? result.dataUrl : '', error: result?.ok ? '' : (result?.error || 'Could not create preview.') } : value);
+  }, [printPreview]);
+  const openPrintPreview = useCallback(async (id) => {
+    if (!id) return;
+    const initial = { webContentsId: id, landscape: false, pageSize: 'A4', printBackground: true, loading: true, dataUrl: '', error: '' };
+    setPrintPreview(initial);
+    const result = await ipc?.invoke('create-print-preview', id, initial);
+    setPrintPreview(value => value ? { ...value, loading: false, dataUrl: result?.ok ? result.dataUrl : '', error: result?.ok ? '' : (result?.error || 'Could not create preview.') } : value);
+  }, []);
 
   const home = useCallback(() => {
     const t = tabRef.current;
@@ -2279,7 +2334,8 @@ export default function App() {
       { type: 'sep' },
       { label: 'Reload', icon: 'RotateCcw', disabled: target.kind !== 'web', action: { tab: 'reload', id: target.id } },
       { label: 'Duplicate', icon: 'Copy', disabled: target.kind !== 'web', action: { tab: 'duplicate', id: target.id } },
-      { label: 'Pin', icon: 'Pin', action: { tab: 'pin', id: target.id } },
+      { label: target.pinned ? 'Unpin' : 'Pin', icon: 'Pin', action: { tab: 'pin', id: target.id } },
+      { label: target.muted ? 'Unmute site' : 'Mute site', icon: 'Volume2', disabled: target.kind !== 'web', action: { tab: 'mute', id: target.id } },
       { type: 'sep' },
       { label: 'Close', icon: 'X', hint: 'Ctrl W', action: { tab: 'close', id: target.id } },
       { label: 'Close other tabs', icon: 'Layers', disabled: !others.length, action: { tab: 'close-others', id: target.id } },
@@ -2310,6 +2366,10 @@ export default function App() {
         items.push({ label: 'Back', icon: 'ArrowLeft', action: { cmd: 'back' } });
         items.push({ label: 'Forward', icon: 'ArrowRight', action: { cmd: 'forward' } });
         items.push({ label: 'Reload', icon: 'RotateCcw', action: { cmd: 'reload' } });
+        sep();
+        items.push({ label: 'Ask Mavis about this page', icon: 'Sparkles', action: { menu: 'mavis' } });
+        items.push({ label: 'Open in reading mode', icon: 'BookOpen', action: { cmd: 'reader' } });
+        items.push({ label: 'Translate page', icon: 'Languages', action: { menu: 'translate' } });
         sep();
         items.push({ label: 'Save page as…', icon: 'Save', action: { cmd: 'savePage' } });
         items.push({ label: 'Print…', icon: 'Printer', action: { cmd: 'print' } });
@@ -2351,6 +2411,7 @@ export default function App() {
         case 'install-site-app': installCurrentSite(); break;
         case 'split-view': toggleSplitView(); break;
         case 'group-tabs': toggleTabGroup(); break;
+        case 'mavis': setSidePanel(previous => previous.open && previous.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, width: 420, incognito }); break;
         case 'zoom-in': doZoom('in'); break;
         case 'zoom-out': doZoom('out'); break;
         case 'zoom-reset': doZoom('reset'); break;
@@ -2359,7 +2420,8 @@ export default function App() {
     } else if (a.cmd) {
       const wv = activeWebview();
       const id = a.targetId || (wv && wv.getWebContentsId ? wv.getWebContentsId() : null);
-      ipc?.send('view-command', id, a.cmd, a.arg);
+      if (a.cmd === 'print') openPrintPreview(id);
+      else ipc?.send('view-command', id, a.cmd, a.arg);
     }
     else if (a.tab) {
       const target = tabs.find(item => item.id === a.id);
@@ -2371,7 +2433,8 @@ export default function App() {
       else if (a.tab === 'reload') { setActiveId(a.id); setTimeout(() => { try { webviewsRef.current.get(a.id)?.reload(); } catch (_) {} }, 0); }
       else if (a.tab === 'split') { setActiveId(a.id); const other = tabs.find(item => item.kind === 'web' && item.id !== a.id); if (other) setSplitTabId(other.id); }
       else if (a.tab === 'group') { if (target.groupId) setTabs(items => items.map(item => item.id === a.id ? { ...item, groupId: null, groupLabel: '', groupColor: '' } : item)); else groupDroppedTabs(a.id, a.id === activeIdRef.current ? (tabs.find(item => item.id !== a.id)?.id || a.id) : activeIdRef.current); }
-      else if (a.tab === 'pin') setTabs(items => items.map(item => item.id === a.id ? { ...item, pinned: !item.pinned } : item));
+      else if (a.tab === 'pin') setTabs(items => { const next = items.map(item => item.id === a.id ? { ...item, pinned: !item.pinned } : item); return [...next.filter(item => item.pinned), ...next.filter(item => !item.pinned)]; });
+      else if (a.tab === 'mute') { const wv = webviewsRef.current.get(a.id); const id = wv?.getWebContentsId?.(); if (id) ipc?.send('view-command', id, 'mute'); setTabs(items => items.map(item => item.id === a.id ? { ...item, muted: !item.muted } : item)); }
       else if (a.tab === 'new-right') { const id = openWebTab(); setTabs(items => { const from = items.findIndex(item => item.id === id); const at = items.findIndex(item => item.id === a.id); if (from < 0 || at < 0) return items; const next = items.slice(); const [created] = next.splice(from, 1); next.splice(at + 1, 0, created); return next; }); }
     }
     else if (a.open) openWebTab(a.open);
@@ -2387,7 +2450,7 @@ export default function App() {
     else if (a.kind === 'dd-ext-toggle') { toggleExtension(a.id, a.enabled); }
     else if (a.kind === 'dd-ext-pin') { pinExt(a.id, a.pinned); }
     else if (a.kind === 'dd-ext-settings' || a.kind === 'dd-ext-manage') { openPage('extensions'); }
-  }, [openWebTab, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt, tabs, closeTab, groupDroppedTabs]);
+  }, [openWebTab, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt, tabs, closeTab, groupDroppedTabs, openPrintPreview]);
 
   useEffect(() => {
     const wv = activeWebview();
@@ -2493,6 +2556,7 @@ export default function App() {
         case 'zoom-reset': doZoom('reset'); break;
         case 'reader': { const wv = activeWebview(); ipc?.send('view-command', wv && wv.getWebContentsId ? wv.getWebContentsId() : null, 'reader'); break; }
         case 'devtools': { const wv = activeWebview(); ipc?.send('view-command', wv && wv.getWebContentsId ? wv.getWebContentsId() : null, 'devtools'); break; }
+        case 'print': { const wv = activeWebview(); openPrintPreview(wv && wv.getWebContentsId ? wv.getWebContentsId() : null); break; }
         case 'next-tab': setTabs(v => { const i = v.findIndex(t => t.id === activeIdRef.current); setActiveId(v[(i + 1) % v.length].id); return v; }); break;
         case 'prev-tab': setTabs(v => { const i = v.findIndex(t => t.id === activeIdRef.current); setActiveId(v[(i - 1 + v.length) % v.length].id); return v; }); break;
         case 'settings': openPage('settings'); break;
@@ -2508,7 +2572,7 @@ export default function App() {
       }
     });
     return typeof unsubscribe === 'function' ? unsubscribe : undefined;
-  }, [openWebTab, closeTab, openPage, bookmark, openFind, back, forward, reload, doZoom]);
+  }, [openWebTab, closeTab, openPage, bookmark, openFind, back, forward, reload, doZoom, openPrintPreview]);
 
   const rmBookmark = async u => setBookmarks(await ipc.invoke('remove-bookmark', u));
   const moveBookmark = async (u, folder) => setBookmarks(await ipc.invoke('move-bookmark', u, folder));
@@ -2601,7 +2665,7 @@ export default function App() {
   return (
     <View style={[s.app, { backgroundColor: theme.bg }]}>
       <View style={[s.chrome, { backgroundColor: theme.chrome + 'cc', borderBottomColor: theme.border + '60', zIndex: 1001 }]} {...GLASS_HEAVY}>
-        <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} onGroupTabs={groupDroppedTabs} onTabMenu={openTabMenu} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
+        <Tabs tabs={tabs} active={activeId} onSwitch={setActiveId} onClose={closeTab} onNew={() => openWebTab()} onReorder={reorderTab} onGroupTabs={groupDroppedTabs} onTabMenu={openTabMenu} onTabPeek={async id => { const wv = webviewsRef.current.get(id); return wv?.getWebContentsId ? ipc?.invoke('capture-webview-preview', wv.getWebContentsId()) : ''; }} incognito={incognito} account={account} closingTabs={closingTabs} theme={theme} />
         <Nav tab={tab} isWeb={isWeb} loading={tab.loading} urlRef={urlRef} go={go} back={back} forward={forward} reload={reload} stop={() => { const wv = activeWebview(); if (wv?.stop) { try { wv.stop(); } catch (_) {} } }} home={home} menu={openMenu} bookmark={bookmark} bookmarked={marked} updateStatus={updateStatus} onUpdate={() => updateStatus?.phase === 'downloaded' ? ipc.invoke('install-update') : updateStatus?.phase === 'available' ? ipc.invoke('download-update') : openPage('settings')} groupSuggestion={relatedTabs} onGroup={toggleTabGroup} splitTabId={splitTabId} onSplit={toggleSplitView} onInstallApp={installCurrentSite}
           pinnedExts={extActs.filter(a => a.pinned)} onExt={clickExt} onExtPanel={() => setExtPanelOpen(!extPanelOpen)} onMavis={() => setSidePanel(p => p.open && p.mavis ? { open: false, extId: null } : { open: true, extId: 'mavis', mavis: true, url: 'https://mavis.tieddr.com', width: 420, incognito })} bookmarks={bookmarks} history={history} theme={theme}
           extPanelOpen={extPanelOpen} setExtPanelOpen={setExtPanelOpen} extActs={extActs} clickExt={clickExt} openPage={openPage} toggleExtension={toggleExtension} pinExt={pinExt} showViewLive={showViewLive} ddCooldownRef={navDdCooldownRef} urlWrapRef={urlWrapRef}
@@ -2672,13 +2736,14 @@ export default function App() {
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}
-        {sidePanel.open ? <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} /> : null}
+        {sidePanel.open ? <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: sidePanel.width || 420, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme.border, backgroundColor: theme.panel }}>{sidePanel.mavis ? <MavisPanel account={account} webContentsId={activeWebview()?.getWebContentsId?.()} onSignIn={signIn} onClose={() => setSidePanel({ open: false, extId: null })} theme={theme} /> : <SidePanelHost info={sidePanel} preloadUrl={preloadUrl} contentRef={contentRef} onClose={() => setSidePanel({ open: false, extId: null })} onOpenTab={openWebTab} theme={theme} />}</View> : null}
         {activeDownload ? <TouchableOpacity onPress={() => openPage('downloads')} style={{ position: 'absolute', right: sidePanel.open ? 420 : 16, top: 14, zIndex: 60, width: 286, minHeight: 58, padding: 11, borderRadius: 15, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.chrome + 'f2', shadowColor: '#000', shadowOpacity: .24, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }} {...GLASS_HEAVY}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Download size={17} color={theme.accent} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }} numberOfLines={1}>{activeDownload.filename}</Text><Text style={{ color: theme.muted, fontSize: 10.5, marginTop: 3 }}>{activeDownload.state === 'paused' ? 'Paused' : `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 0}% · Open downloads`}</Text></View><ChevronRight size={15} color={theme.faint} /></View>
           <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden', marginTop: 9 }}><View style={{ height: '100%', width: `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 4}%`, backgroundColor: theme.accent }} /></View>
         </TouchableOpacity> : null}
       </View>
       {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
+      {printPreview ? <PrintPreview state={printPreview} onChange={changes => refreshPrintPreview(changes)} onRefresh={() => refreshPrintPreview()} onPrint={() => ipc?.invoke('print-page', printPreview.webContentsId, printPreview)} onClose={() => setPrintPreview(null)} theme={theme} /> : null}
     </View>
   );
 }

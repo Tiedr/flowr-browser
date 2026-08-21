@@ -382,6 +382,7 @@ function shortcutFor(input) {
   if (ctrl && key === 'd') return 'bookmark-page';
   if (ctrl && key === 'h') return 'history';
   if (ctrl && key === 'j') return 'downloads';
+  if (ctrl && key === 'p') return 'print';
   if (ctrl && key === ',') return 'settings';
   if (key === 'f9') return 'reader';
   if (ctrl && /^[1-9]$/.test(key)) return key === '9' ? 'tab-last' : `tab-${key}`;
@@ -886,6 +887,7 @@ ipcMain.on('view-command', (event, id, cmd, arg) => {
     case 'forward': if (wc.canGoForward()) wc.goForward(); break;
     case 'reload': wc.reload(); break;
     case 'hard-reload': wc.reloadIgnoringCache(); break;
+    case 'mute': wc.setAudioMuted(!wc.isAudioMuted()); break;
     case 'stop': wc.stop(); break;
     case 'copy': wc.copy(); break;
     case 'cut': wc.cut(); break;
@@ -1192,6 +1194,71 @@ ipcMain.handle('open-external', (_event, url) => {
   if (!/^https:\/\//i.test(String(url || ''))) return false;
   void shell.openExternal(url);
   return true;
+});
+
+ipcMain.handle('create-print-preview', async (_event, id, options = {}) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return { ok: false, error: 'The page is no longer available.' };
+  try {
+    const pdf = await wc.printToPDF({
+      printBackground: options.printBackground !== false,
+      landscape: !!options.landscape,
+      pageSize: options.pageSize || 'A4'
+    });
+    return { ok: true, dataUrl: `data:application/pdf;base64,${pdf.toString('base64')}`, bytes: pdf.length };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Could not create the print preview.' };
+  }
+});
+
+ipcMain.handle('capture-webview-preview', async (_event, id) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return '';
+  try {
+    const image = await wc.capturePage();
+    return image.resize({ width: 420, quality: 'good' }).toDataURL();
+  } catch (_) { return ''; }
+});
+
+ipcMain.handle('print-page', async (_event, id, options = {}) => {
+  const wc = webContents.fromId(id);
+  if (!wc || wc.isDestroyed()) return { ok: false, error: 'The page is no longer available.' };
+  return new Promise(resolve => wc.print({
+    silent: false,
+    printBackground: options.printBackground !== false,
+    landscape: !!options.landscape,
+    pageSize: options.pageSize || 'A4',
+    margins: { marginType: options.marginType || 'default' }
+  }, (success, failureReason) => resolve(success ? { ok: true } : { ok: false, error: failureReason || 'Printing was cancelled.' })));
+});
+
+ipcMain.handle('mavis-chat', async (_event, payload = {}) => {
+  const account = accountStore.get('account');
+  if (!account?.token) return { ok: false, requiresAccount: true, error: 'Connect your Tieddr Account to use Mavis.' };
+  const input = String(payload.input || '').trim();
+  if (!input) return { ok: false, error: 'Ask Mavis something first.' };
+  try {
+    vaultAccount.setAccessToken(account.token);
+    const jwt = await vaultAccount.getAppwriteJwt();
+    if (!jwt) return { ok: false, requiresAccount: true, error: 'Your Tieddr session needs to be refreshed.' };
+    let pageContext = String(payload.context || '').slice(0, 8000);
+    const wc = payload.webContentsId ? webContents.fromId(payload.webContentsId) : null;
+    if (wc && !wc.isDestroyed()) {
+      try {
+        const page = await wc.executeJavaScript(`({title:document.title,url:location.href,text:(document.querySelector('main,article,[role=main]')||document.body)?.innerText?.slice(0,6000)||''})`);
+        pageContext = `The user is browsing in Flowr.\nPage: ${page?.title || ''}\nURL: ${page?.url || ''}\nVisible page text:\n${page?.text || ''}\n${pageContext}`.slice(0, 10000);
+      } catch (_) {}
+    }
+    const response = await fetch('https://space.tieddr.com/api/mavis', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jwt, action: 'ask', input, context: pageContext, history: Array.isArray(payload.history) ? payload.history.slice(-12) : [] })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, error: data.error || `Mavis returned ${response.status}.` };
+    return { ok: true, ...data };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Mavis is unavailable right now.' };
+  }
 });
 
 ipcMain.handle('get-tieddr-news', async () => {
