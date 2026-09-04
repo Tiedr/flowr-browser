@@ -38,6 +38,8 @@ jobs:
       - run: npm run test:updater
       - run: npm run test:privacy
       - run: npm run test:importer
+      - run: npm run test:navigation
+      - run: npm run test:account-session
       - name: Prepare App Store Connect API key
         if: runner.os == 'macOS'
         shell: bash
