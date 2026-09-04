@@ -6,7 +6,7 @@ console.warn = _safeLog(_origWarn);
 console.error = _safeLog(_origError);
 process.on('uncaughtException', (err) => { if (err.code !== 'EPIPE') console.error('Uncaught exception:', err); });
 
-const { app, BrowserWindow, ipcMain, shell, session, dialog, clipboard, safeStorage, webContents, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, session, dialog, clipboard, safeStorage, webContents, screen, Tray, Menu } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const crypto = require('crypto');
@@ -15,7 +15,7 @@ const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const Store = require('./store');
 const { parseExtensionId, installStoreExtension } = require('./crx');
-const { shouldBlockRequest } = require('./adblock');
+const { shouldBlockRequest, isDangerousUrl } = require('./adblock');
 const { createUpdateController } = require('./updater');
 const { parseSiteRules, matchesSiteRule, filterHistory } = require('./privacy');
 const { parsePasswordCsv, parseBookmarkHtml, parseChromiumBookmarks } = require('./importer');
@@ -76,8 +76,33 @@ const SETTINGS_DEFAULTS = {
   blockTrackers: true,
   httpsOnly: false,
   doNotTrack: false,
+  fingerprintProtection: false,
+  reducedReferrer: false,
   defaultZoom: 1,
   startup: 'start',
+  restoreSession: true,
+  newTab: 'start',
+  newTabBehavior: 'start',
+  newWindowBehavior: 'start',
+  showTabBar: true,
+  tabGrouping: true,
+  middleClickClose: true,
+  showTabClose: true,
+  lazyTabs: false,
+  tabSearch: true,
+  tabWidth: 'normal',
+  tabFontSize: 'medium',
+  uiFont: 'system',
+  highContrast: false,
+  blurIntensity: 'medium',
+  glassToolbar: true,
+  glassCards: true,
+  glassSidebar: true,
+  searchSuggestions: true,
+  historySuggestions: true,
+  bookmarkSuggestions: true,
+  aiTabGroups: false,
+  smartCopy: false,
   downloadPath: '',
   askWhereToSave: false,
   savePasswords: true,
@@ -101,6 +126,40 @@ const SETTINGS_DEFAULTS = {
   language: 'en',
   accentColor: '',
   startBackground: 'gradient-midnight',
+  // Vault security
+  vaultAutoLock: 5,
+  lockOnIdle: true,
+  lockOnMinimize: true,
+  lockOnClose: true,
+  clipboardClear: 30,
+  biometricAuth: false,
+  // Safe Browsing (local protection levels)
+  safeBrowsing: 'standard',
+  safeBrowsingData: true,
+  // Performance
+  gpuRasterization: false,
+  acceleratedCanvas: false,
+  smoothScroll: true,
+  preloadPages: true,
+  spellCheck: true,
+  // Developer
+  devTools: true,
+  alwaysShowConsole: false,
+  heapStats: false,
+  consoleLogging: false,
+  sourceMaps: true,
+  remoteDebugging: false,
+  debugPort: '9222',
+  overrideUserAgent: false,
+  customUserAgent: '',
+  emulateMediaType: false,
+  networkThrottling: false,
+  requestBlocking: false,
+  requestBlockPatterns: '',
+  // System / updates
+  updateChannel: 'stable',
+  background: false,
+  sendStats: false,
   onboardingCompleted: false,
   lastSeenVersion: '',
   tieddrNewsEndpoint: 'https://news.tieddr.com/api/feed',
@@ -130,9 +189,23 @@ if ((settingsStore.get('dnsOverHttps') || 'off') !== 'off') {
   app.commandLine.appendSwitch('dns-over-https-mode', settingsStore.get('dnsOverHttps') === 'strict' ? 'secure' : 'automatic');
   app.commandLine.appendSwitch('dns-over-https-templates', 'https://cloudflare-dns.com/dns-query{?dns}');
 }
+// Rendering toggles that require Chromium flags — must be registered before
+// app.ready. GPU rasterization and accelerated canvas are opt-in; smooth
+// scrolling is on by default and disabled explicitly when turned off.
+if (settingsStore.get('gpuRasterization')) app.commandLine.appendSwitch('enable-gpu-rasterization');
+if (settingsStore.get('acceleratedCanvas')) app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
+if (settingsStore.get('smoothScroll') === false) app.commandLine.appendSwitch('disable-smooth-scrolling');
+if (settingsStore.get('remoteDebugging') === true) {
+  const debugPort = Number(settingsStore.get('debugPort')) || 9222;
+  if (!app.commandLine.hasSwitch('remote-debugging-port')) {
+    app.commandLine.appendSwitch('remote-debugging-port', String(debugPort));
+  }
+}
 const downloadsStore = new Store('downloads', { downloads: [] });
 const extensionsStore = new Store('extensions', { extensions: [] });
 const accountStore = new Store('account', { account: null });
+const sessionStore = new Store('session', { tabs: [], activeUrl: '' });
+const statsStore = new Store('stats', { lastPing: '' });
 
 let currentProfileId = profilesStore.get('activeProfileId');
 let bookmarksStore;
@@ -185,9 +258,49 @@ initStores(currentProfileId);
 // private in-memory partition; normal windows use the persistent default session.
 let browsingSession = null;
 
-function configureSession(ses) {
-  // Present as the Chromium browser engine we actually embed. Many web apps
-  // reject Electron's default UA even though the page APIs are compatible.
+async function migrateLegacyTieddrCookies(targetSession) {
+  if (!targetSession || targetSession === session.defaultSession || !accountStore.get('account')) return;
+  try {
+    const [legacy, current] = await Promise.all([
+      session.defaultSession.cookies.get({}),
+      targetSession.cookies.get({})
+    ]);
+    const keyOf = cookie => `${String(cookie.domain || '').replace(/^\./, '')}|${cookie.path || '/'}|${cookie.name}`;
+    const existing = new Set(current.filter(cookie => /(^|\.)tieddr\.com$/i.test(cookie.domain || '')).map(keyOf));
+    const tieddrCookies = legacy.filter(cookie => /(^|\.)tieddr\.com$/i.test(cookie.domain || '') && !existing.has(keyOf(cookie)));
+    await Promise.all(tieddrCookies.map(cookie => {
+      const hostname = String(cookie.domain || '').replace(/^\./, '');
+      const details = {
+        url: `${cookie.secure ? 'https' : 'http'}://${hostname}${cookie.path || '/'}`,
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path || '/',
+        secure: !!cookie.secure,
+        httpOnly: !!cookie.httpOnly
+      };
+      if (cookie.sameSite && cookie.sameSite !== 'unspecified') details.sameSite = cookie.sameSite;
+      if (cookie.expirationDate) details.expirationDate = cookie.expirationDate;
+      return targetSession.cookies.set(details);
+    }));
+  } catch (error) {
+    console.warn('[Flowr] Could not migrate the legacy Tieddr web session:', error?.message || error);
+  }
+}
+
+function safeBrowsingLevel() {
+  const value = settingsStore.get('safeBrowsing');
+  return value === 'enhanced' || value === 'off' ? value : 'standard';
+}
+
+// Resolve the user agent presented to sites. Flowr normally spoofs a plain
+// Chrome UA because many web apps reject Electron's default; users can fully
+// override it from Settings → Developer.
+function currentUserAgent() {
+  if (settingsStore.get('overrideUserAgent') === true) {
+    const custom = String(settingsStore.get('customUserAgent') || '').trim();
+    if (custom) return custom;
+  }
   const chromeMajor = String(process.versions.chrome || '142.0.0.0').split('.')[0];
   const platformTokens = {
     darwin: { ua: 'Macintosh; Intel Mac OS X 10_15_7', hint: '"macOS"' },
@@ -195,10 +308,24 @@ function configureSession(ses) {
     win32: { ua: 'Windows NT 10.0; Win64; x64', hint: '"Windows"' }
   };
   const platform = platformTokens[process.platform] || platformTokens.linux;
-  const compatibleUA = `Mozilla/5.0 (${platform.ua}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`;
+  return `Mozilla/5.0 (${platform.ua}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`;
+}
+
+function configureSession(ses) {
+  // Present as the Chromium browser engine we actually embed. Many web apps
+  // reject Electron's default UA even though the page APIs are compatible.
+  const compatibleUA = currentUserAgent();
   ses.setUserAgent(compatibleUA, 'en-US,en;q=0.9');
+  try { ses.setSpellCheckerEnabled(settingsStore.get('spellCheck') !== false); } catch (_) {}
+  const chromeMajor = String(process.versions.chrome || '142.0.0.0').split('.')[0];
+  const platformTokens = {
+    darwin: { hint: '"macOS"' },
+    linux: { hint: '"Linux"' },
+    win32: { hint: '"Windows"' }
+  };
+  const platform = platformTokens[process.platform] || platformTokens.linux;
   ses.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
-    details.requestHeaders['User-Agent'] = compatibleUA;
+    details.requestHeaders['User-Agent'] = currentUserAgent();
     // Avoid Electron-specific client-hint brands triggering unsupported-browser gates.
     details.requestHeaders['sec-ch-ua'] = `"Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}", "Not_A Brand";v="99"`;
     details.requestHeaders['sec-ch-ua-platform'] = platform.hint;
@@ -210,13 +337,34 @@ function configureSession(ses) {
     }
     callback({ requestHeaders: details.requestHeaders });
   });
+  // User-defined request blocking patterns (Settings → Developer), wildcard style.
+  const requestBlockRegexes = () => String(settingsStore.get('requestBlockPatterns') || '')
+    .split(/[\n,]+/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(pattern => {
+      try { return new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*'), 'i'); }
+      catch (_) { return null; }
+    })
+    .filter(Boolean);
   // Match all web requests against the compact, testable Flowr filter engine.
   // It blocks known advertising hosts plus third-party tracking endpoints while
   // leaving first-party pages and navigation untouched.
   ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    let target = null;
+    try { target = new URL(details.url); } catch (_) {}
+    // Source maps off → cancel .map fetches outright so DevTools shows raw code.
+    if (settingsStore.get('sourceMaps') === false && target && /\.map$/i.test(target.pathname)) {
+      callback({ cancel: true });
+      return;
+    }
+    if (settingsStore.get('requestBlocking') === true && requestBlockRegexes().some(regex => regex.test(details.url))) {
+      callback({ cancel: true });
+      return;
+    }
     if (settingsStore.get('httpsOnly') && details.url.startsWith('http://')) {
       try {
-        const parsed = new URL(details.url);
+        const parsed = target || new URL(details.url);
         if (!['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) {
           parsed.protocol = 'https:';
           callback({ redirectURL: parsed.href });
@@ -224,7 +372,15 @@ function configureSession(ses) {
         }
       } catch (_) {}
     }
-    callback({ cancel: shouldBlockRequest(details, adBlockerEnabled) });
+    if (details.resourceType === 'mainFrame') {
+      const level = safeBrowsingLevel();
+      if (level !== 'off' && isDangerousUrl(details.url, level)) {
+        send('safebrowsing-blocked', { url: details.url, level });
+        callback({ cancel: true });
+        return;
+      }
+    }
+    callback({ cancel: shouldBlockRequest(details, adBlockerEnabled, trackerBlockingEnabled) });
   });
 
   // Grant common extension permissions — these are safe, non-privileged APIs
@@ -267,7 +423,8 @@ const updateController = createUpdateController({
   autoUpdater,
   dialog,
   send,
-  getWindow: () => mainWindow
+  getWindow: () => mainWindow,
+  getChannel: () => settingsStore.get('updateChannel') || 'stable'
 });
 
 function createBrandedPopup(url) {
@@ -366,6 +523,7 @@ function shortcutFor(input) {
   const key = (input.key || '').toLowerCase();
   if (ctrl && shift && key === 't') return 'reopen';
   if (ctrl && shift && key === 'n') return 'incognito';
+  if (ctrl && shift && key === 'a') return 'tab-search';
   if (ctrl && key === 't') return 'new-tab';
   if (ctrl && key === 'n') return 'new-window';
   if (ctrl && key === 'w') return 'close-tab';
@@ -401,6 +559,11 @@ const READER_JS = `(function(){
   var art=null;
   for(var i=0;i<SEL.length;i++){var e=document.querySelector(SEL[i]);if(e&&(e.innerText||'').replace(/\\s+/g,' ').length>500){art=e;break;}}
   if(!art){var best=null,score=-1;document.querySelectorAll('div,section').forEach(function(el){var len=(el.innerText||'').length;if(len<600)return;var ps=el.querySelectorAll('p').length;if(ps<3)return;var sc=ps*40+len;if(sc>score){score=sc;best=el;}});art=best;}
+  // Reader mode must still be useful on modern app-like pages that do not use
+  // an article element or enough paragraphs to pass the readability score.
+  // Fall back to the main landmark, then the document body, and strip the
+  // application furniture from the clone below.
+  if(!art)art=document.querySelector('main,[role=main]')||document.body;
   if(!art)return 'none';
   var clone=art.cloneNode(true);
   clone.querySelectorAll('nav,aside,header,footer,form,script,style,noscript,button,input,select,textarea,iframe,.navbox,.sidebar,.infobox,.mw-editsection,[role=navigation],[role=complementary],.reflist,.mw-references-wrap,.references,.catlinks,#toc,.toc,.hatnote,.shortdescription,.ambox,.metadata,.mw-jump-link,.noprint,.vector-toc,.mw-indicators,.thumbcaption .magnify,.advertisement,[class*=share],[class*=social],[aria-hidden=true]').forEach(function(el){el.remove();});
@@ -428,6 +591,8 @@ const READER_JS = `(function(){
 // Every shortcut is forwarded to the renderer, which owns the tab/webview and
 // executes the corresponding action on the active <webview>.
 function handleShortcut(action) {
+  // DevTools can be disabled from Settings → Developer.
+  if (action === 'devtools' && settingsStore.get('devTools') === false) return;
   send('shortcut', action);
 }
 
@@ -611,6 +776,13 @@ async function loadStoredExtensions() {
 }
 
 function createWindow() {
+  // Reopening (tray "Open Flowr") must focus the existing window, not spawn a second one.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.moveTop();
+    return mainWindow;
+  }
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -632,6 +804,10 @@ function createWindow() {
   });
 
   mainWindow.setMenu(null);
+
+  // Vault lock-on-minimize / lock-on-close (Settings → Privacy & Security).
+  mainWindow.on('minimize', () => { if (settingsStore.get('lockOnMinimize') !== false) lockVaultNow(); });
+  mainWindow.on('close', () => { if (settingsStore.get('lockOnClose') !== false) lockVaultNow(); });
 
   // Keyboard shortcuts while the app chrome has focus. Per-web-view shortcuts
   // (focus inside a page) are attached from the renderer via 'register-webview'.
@@ -662,7 +838,11 @@ function createWindow() {
     : `file://${path.join(__dirname, '../../dist/index.html')}`;
 
   mainWindow.webContents.once('did-finish-load', () => {
-    if (process.env.FLOW_START_URL) send('open-start-url', process.env.FLOW_START_URL);
+    if (process.env.FLOW_START_URL) {
+      let transferState = null;
+      try { if (process.env.FLOW_TRANSFER_STATE) transferState = JSON.parse(Buffer.from(process.env.FLOW_TRANSFER_STATE, 'base64').toString('utf8')); } catch (_) {}
+      send('open-start-url', { url: process.env.FLOW_START_URL, transferState });
+    }
   });
   mainWindow.loadURL(startUrl).catch(() => revealWindow());
 
@@ -727,6 +907,7 @@ app.whenReady().then(async () => {
   // defaultSession does not affect <webview partition="persist:flow-main">.
   browsingSession = INCOGNITO ? session.fromPartition('flow-incognito') : session.fromPartition('persist:flow-main');
   configureSession(browsingSession);
+  if (!INCOGNITO) await migrateLegacyTieddrCookies(browsingSession);
   createWindow();
   if (!INCOGNITO) updateController.initialize();
 
@@ -750,20 +931,30 @@ app.whenReady().then(async () => {
 
   // System idle detection for vault auto-lock
   const { powerMonitor } = require('electron');
-  powerMonitor.on('lock-screen', () => {
-    const settings = settingsStore.get('settings') || {};
-    if (settings.lockOnIdle !== false && vault.isUnlocked()) {
+  const lockOnSystemIdle = () => {
+    if (settingsStore.get('lockOnIdle') !== false && vault.isUnlocked()) {
       vault.lock();
-      if (mainWindow) mainWindow.webContents.send('vault-locked');
+      send('vault-locked');
     }
-  });
-  powerMonitor.on('suspend', () => {
-    const settings = settingsStore.get('settings') || {};
-    if (settings.lockOnIdle !== false && vault.isUnlocked()) {
-      vault.lock();
-      if (mainWindow) mainWindow.webContents.send('vault-locked');
-    }
-  });
+  };
+  powerMonitor.on('lock-screen', lockOnSystemIdle);
+  powerMonitor.on('suspend', lockOnSystemIdle);
+
+  // Preload pages: warm DNS for the sites the user actually visits so first
+  // navigations resolve faster (Settings → Performance → "Preload pages").
+  if (!INCOGNITO && settingsStore.get('preloadPages') !== false) {
+    setTimeout(() => {
+      try {
+        const hosts = [...new Set(readHistory().slice(0, 40).map(item => {
+          try { return new URL(item.url).hostname; } catch (_) { return ''; }
+        }).filter(Boolean))].slice(0, 8);
+        hosts.forEach(hostName => { try { browsingSession.prefetchDNS(hostName); } catch (_) {} });
+      } catch (_) {}
+    }, 2500);
+  }
+
+  // Anonymous, opt-in launch ping (Settings → System → "Send usage statistics").
+  if (!INCOGNITO) setTimeout(maybeSendUsagePing, 1500);
 
   // Already signed in from a previous launch — sync now, then keep syncing
   // periodically for the rest of this session. Skipped in incognito.
@@ -779,28 +970,63 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('window-all-closed', () => {
-  // Flush all pending debounced writes before quitting
-  [profilesStore, settingsStore, downloadsStore, extensionsStore, accountStore].forEach(s => s.flush && s.flush());
+function flushAllStores() {
+  [profilesStore, settingsStore, downloadsStore, extensionsStore, accountStore, sessionStore, statsStore].forEach(s => s.flush && s.flush());
   if (bookmarksStore) bookmarksStore.flush && bookmarksStore.flush();
   if (historyStore) historyStore.flush && historyStore.flush();
   if (passwordsStore) passwordsStore.flush && passwordsStore.flush();
   if (notesStore) notesStore.flush && notesStore.flush();
-  if (process.platform !== 'darwin') app.quit();
+}
+
+// "Continue running background apps" — when every window closes, Flowr stays
+// resident behind a tray icon instead of quitting.
+let tray = null;
+function ensureBackgroundTray() {
+  if (tray) return;
+  try {
+    tray = new Tray(APP_ICON_PATH);
+    tray.setToolTip('Flowr');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Open Flowr', click: () => createWindow() },
+      { type: 'separator' },
+      { label: 'Quit Flowr', click: () => app.quit() }
+    ]));
+    tray.on('double-click', () => createWindow());
+  } catch (_) { tray = null; }
+}
+
+app.on('window-all-closed', () => {
+  flushAllStores();
+  if (process.platform === 'darwin') return;
+  if (settingsStore.get('background') === true) {
+    ensureBackgroundTray();
+    return;
+  }
+  app.quit();
 });
 
 app.on('before-quit', () => {
   if (memoryPressureInterval) clearInterval(memoryPressureInterval);
+  if (tray) { try { tray.destroy(); } catch (_) {} tray = null; }
   if (settingsStore.get('clearPrivateDataOnExit')) {
     writeHistory([]);
     try { void (browsingSession || session.defaultSession).clearStorageData({ storages: ['cookies', 'localstorage', 'caches', 'indexdb', 'serviceworkers', 'websql'] }); } catch (_) {}
   }
-  [profilesStore, settingsStore, downloadsStore, extensionsStore, accountStore].forEach(s => s.flush && s.flush());
-  if (bookmarksStore) bookmarksStore.flush && bookmarksStore.flush();
-  if (historyStore) historyStore.flush && historyStore.flush();
-  if (passwordsStore) passwordsStore.flush && passwordsStore.flush();
-  if (notesStore) notesStore.flush && notesStore.flush();
+  flushAllStores();
 });
+
+// Opt-in anonymous launch ping — one per day, fire-and-forget.
+function maybeSendUsagePing() {
+  if (!settingsStore.get('sendStats')) return;
+  const today = new Date().toDateString();
+  if (statsStore.get('lastPing') === today) return;
+  statsStore.set('lastPing', today);
+  void fetch(`${TIEDDR_API_BASE}/v1/stats/browser-launch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app: 'flowr', version: app.getVersion(), platform: process.platform, channel: settingsStore.get('updateChannel') || 'stable' })
+  }).catch(() => {});
+}
 
 // --- Web view (renderer-owned <webview> elements) -------------------------
 // The renderer creates the <webview> DOM elements and drives navigation, find,
@@ -810,8 +1036,36 @@ app.on('before-quit', () => {
 // Absolute file:// URL of the per-page preload (password/wallet autofill).
 ipcMain.handle('get-view-preload', () => pathToFileURL(path.join(__dirname, 'viewpreload.js')).href);
 ipcMain.on('privacy-web-preferences', event => {
-  event.returnValue = { blockUnpromptedPasskeys: settingsStore.get('blockUnpromptedPasskeys') !== false };
+  event.returnValue = {
+    blockUnpromptedPasskeys: settingsStore.get('blockUnpromptedPasskeys') !== false,
+    fingerprintProtection: !!settingsStore.get('fingerprintProtection'),
+    smartCopy: !!settingsStore.get('smartCopy')
+  };
 });
+
+// Live-applied developer emulation (CSS media type / network throttling) via
+// the Chrome DevTools Protocol on every registered guest webContents.
+const guestWebContents = new Set();
+function applyDevEmulation(wc) {
+  if (!wc || wc.isDestroyed()) return;
+  const wantMedia = settingsStore.get('emulateMediaType') === true;
+  const wantNet = settingsStore.get('networkThrottling') === true;
+  try {
+    if (!wantMedia && !wantNet) {
+      if (wc.debugger.isAttached()) { try { wc.debugger.detach(); } catch (_) {} }
+      return;
+    }
+    if (!wc.debugger.isAttached()) {
+      wc.debugger.attach('1.3');
+      wc.debugger.sendCommand('Network.enable').catch(() => {});
+    }
+    wc.debugger.sendCommand('Emulation.setEmulatedMedia', { media: wantMedia ? 'print' : 'screen' }).catch(() => {});
+    const conditions = wantNet
+      ? { offline: false, latency: 400, downloadThroughput: 50 * 1024, uploadThroughput: 20 * 1024 }
+      : { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 };
+    wc.debugger.sendCommand('Network.emulateNetworkConditions', conditions).catch(() => {});
+  } catch (_) {}
+}
 
 // Renderer reports a navigation so we can persist history (skipped in incognito).
 ipcMain.on('add-history', (event, url, title) => addToHistory(url, title));
@@ -841,6 +1095,9 @@ ipcMain.on('register-webview', (event, id) => {
   const wc = webContents.fromId(id);
   if (wc && !wc.isDestroyed()) {
     attachShortcuts(wc);
+    guestWebContents.add(id);
+    wc.once('destroyed', () => guestWebContents.delete(id));
+    applyDevEmulation(wc);
     if (!wc.__flowrNavigationWired) {
       wc.__flowrNavigationWired = true;
       const record = (_event, url, _httpResponseCode, _httpStatusText, isMainFrame) => {
@@ -861,11 +1118,18 @@ ipcMain.on('register-webview', (event, id) => {
         try { url = wc.getURL(); } catch (_) {}
         if (/^https?:\/\//i.test(url)) addToHistory(url, title);
       });
+      wc.on('console-message', (_event, level, message, line, sourceId) => {
+        if (INCOGNITO || settingsStore.get('consoleLogging') !== true) return;
+        const tag = ['log', 'warn', 'error', 'debug', 'info'][level] || 'log';
+        console[tag === 'debug' ? 'log' : tag](`[page:${tag}] ${message} (${sourceId}:${line})`);
+      });
       wc.on('context-menu', (_event, params) => send('show-context-menu', { ...contextParams(params), webContentsId: wc.id, ui: false }));
       wc.on('will-redirect', (event, url) => {
         let sourceUrl = '';
         try { sourceUrl = wc.getURL(); } catch (_) {}
-        if (shouldBlockRequest({ url, resourceType: 'mainFrame', initiator: sourceUrl, referrer: sourceUrl }, adBlockerEnabled)) {
+        const sbLevel = safeBrowsingLevel();
+        if ((sbLevel !== 'off' && isDangerousUrl(url, sbLevel)) ||
+            shouldBlockRequest({ url, resourceType: 'mainFrame', initiator: sourceUrl, referrer: sourceUrl }, adBlockerEnabled, trackerBlockingEnabled)) {
           event.preventDefault();
           send('ad-navigation-blocked', { sourceUrl, url });
           return;
@@ -883,10 +1147,17 @@ ipcMain.on('register-webview', (event, id) => {
         }).then(result => { if (result.response === 1 && !wc.isDestroyed()) wc.loadURL(url); }).catch(() => {});
       });
     }
-    wc.setWindowOpenHandler(({ url }) => {
+    wc.setWindowOpenHandler(({ url, disposition }) => {
       if (/^https?:\/\//i.test(url)) {
-        const shouldBlockPopup = shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled);
-        if (!shouldBlockPopup) createBrandedPopup(url);
+        const sbLevel = safeBrowsingLevel();
+        // Popup checks are the "extended" surface — gated by safeBrowsingData.
+        const dangerousPopup = sbLevel !== 'off' && settingsStore.get('safeBrowsingData') !== false && isDangerousUrl(url, sbLevel);
+        const shouldBlockPopup = dangerousPopup ||
+          shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled, trackerBlockingEnabled);
+        if (!shouldBlockPopup) {
+          if (disposition === 'foreground-tab' || disposition === 'background-tab' || disposition === 'new-window') send('open-url-in-new-tab', { url, sourceWebContentsId: wc.id, background: disposition === 'background-tab' });
+          else createBrandedPopup(url);
+        }
       }
       return { action: 'deny' };
     });
@@ -921,8 +1192,15 @@ ipcMain.on('view-command', (event, id, cmd, arg) => {
     case 'copyText': if (arg) clipboard.writeText(arg); break;
     case 'copyImage': if (arg) wc.copyImageAt(arg.x, arg.y); break;
     case 'saveImage': if (arg) wc.downloadURL(arg); break;
-    case 'inspect': if (arg) { wc.openDevTools({ mode: 'right', activate: true }); wc.inspectElement(arg.x | 0, arg.y | 0); } break;
-    case 'devtools': wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode: 'right', activate: true }); break;
+    case 'inspect':
+      if (settingsStore.get('devTools') === false) break;
+      if (arg) { wc.openDevTools({ mode: 'right', activate: true }); wc.inspectElement(arg.x | 0, arg.y | 0); } break;
+    case 'devtools': {
+      if (settingsStore.get('devTools') === false) break;
+      const mode = settingsStore.get('alwaysShowConsole') ? 'bottom' : 'right';
+      wc.isDevToolsOpened() ? wc.closeDevTools() : wc.openDevTools({ mode, activate: true });
+      break;
+    }
     case 'reader': wc.executeJavaScript(READER_JS).catch(() => {}); break;
     case 'print': wc.print(); break;
     case 'savePage': {
@@ -941,12 +1219,59 @@ ipcMain.on('new-window', (event, opts) => {
   const args = process.defaultApp ? [app.getAppPath()] : [];
   const env = { ...process.env };
   if (opts && opts.incognito) env.FLOW_INCOGNITO = '1'; else delete env.FLOW_INCOGNITO;
-  if (opts?.url) env.FLOW_START_URL = String(opts.url);
+  if (opts?.url) env.FLOW_START_URL = String(opts.url); else delete env.FLOW_START_URL;
+  // Settings → Tabs → "New window opens: Blank page" hides the start page.
+  if (opts?.blankStart) env.FLOW_BLANK_START = '1'; else delete env.FLOW_BLANK_START;
   try { spawn(process.execPath, args, { detached: true, stdio: 'ignore', env }).unref(); } catch (_) {}
 });
 
+// A tab tear-out is a transfer, not "open the same URL again". The renderer
+// removes the source tab only after this handler confirms the destination
+// process was started, preventing both accidental duplicates and lost tabs.
+ipcMain.handle('tear-out-tab', async (_event, payload = {}) => {
+  const url = typeof payload.url === 'string' ? payload.url : '';
+  if (!/^https?:\/\//i.test(url)) return { ok: false, error: 'This tab cannot be moved to a window.' };
+  const args = process.defaultApp ? [app.getAppPath()] : [];
+  const env = { ...process.env, FLOW_START_URL: url, FLOW_TRANSFERRED_TAB: '1' };
+  if (payload.state && typeof payload.state === 'object') {
+    try {
+      const encoded = Buffer.from(JSON.stringify(payload.state), 'utf8').toString('base64');
+      if (encoded.length < 24000) env.FLOW_TRANSFER_STATE = encoded;
+    } catch (_) {}
+  } else delete env.FLOW_TRANSFER_STATE;
+  if (payload.incognito) env.FLOW_INCOGNITO = '1'; else delete env.FLOW_INCOGNITO;
+  try {
+    const child = spawn(process.execPath, args, { detached: true, stdio: 'ignore', env });
+    child.unref();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Could not create the new window.' };
+  }
+});
+
 ipcMain.handle('get-incognito', () => INCOGNITO);
+ipcMain.handle('get-window-flags', () => ({
+  incognito: INCOGNITO,
+  blankStart: process.env.FLOW_BLANK_START === '1'
+}));
 ipcMain.handle('get-clipboard-text', () => clipboard.readText());
+
+// --- Session restore (Settings → Tabs & Startup) ---------------------------
+ipcMain.on('save-session', (_event, payload) => {
+  if (INCOGNITO) return;
+  try {
+    const tabs = (Array.isArray(payload?.tabs) ? payload.tabs : [])
+      .filter(url => typeof url === 'string' && /^https?:\/\//i.test(url))
+      .slice(0, 20);
+    sessionStore.set('tabs', tabs);
+    sessionStore.set('activeUrl', typeof payload?.activeUrl === 'string' ? payload.activeUrl : '');
+  } catch (_) {}
+});
+
+ipcMain.handle('get-last-session', () => {
+  if (INCOGNITO) return { tabs: [], activeUrl: '' };
+  return { tabs: sessionStore.get('tabs') || [], activeUrl: sessionStore.get('activeUrl') || '' };
+});
 
 // --- Password manager (backed by the Tieddr Vault when unlocked) ----------
 // When the vault is unlocked it's the source of truth — synced across every
@@ -1018,8 +1343,8 @@ ipcMain.handle('pw-copy', async (event, origin, username) => {
   if (it) { const rv = await vault.reveal(it.id); val = rv.ok ? (rv.value || '') : ''; }
   if (val) {
     clipboard.writeText(val);
-    const settings = settingsStore.get('settings') || {};
-    const clearTime = settings.clipboardClear || 30;
+    touchVaultActivity();
+    const clearTime = Number(settingsStore.get('clipboardClear') ?? 30);
     if (clearTime > 0) {
       if (clipboardClearTimeout) clearTimeout(clipboardClearTimeout);
       clipboardClearTimeout = setTimeout(() => { clipboard.writeText(''); }, clearTime * 1000);
@@ -1036,6 +1361,23 @@ ipcMain.handle('pw-delete', async (event, origin, username) => {
 // --- Tieddr Vault (rich surface: passwords, Tieddr Wallet, secrets) --------
 vault.onLock(() => send('vault-locked'));
 
+// Vault auto-lock — release the vault after N minutes with no vault activity
+// (Settings → Privacy & Security → "Lock vault after").
+let lastVaultActivity = Date.now();
+const touchVaultActivity = () => { lastVaultActivity = Date.now(); };
+setInterval(() => {
+  const minutes = Number(settingsStore.get('vaultAutoLock')) || 0;
+  if (minutes > 0 && vault.isUnlocked() && Date.now() - lastVaultActivity > minutes * 60 * 1000) {
+    vault.lock();
+  }
+}, 30000).unref?.();
+
+// Lock-on-minimize / lock-on-close (Settings → Privacy & Security). Locking
+// persists the locked state, so a closed browser always reopens sealed.
+function lockVaultNow() {
+  if (vault.isUnlocked()) vault.lock();
+}
+
 ipcMain.handle('vault-state', async () => {
   const acc = accountStore.get('account');
   const st = await vault.state();
@@ -1049,6 +1391,7 @@ ipcMain.handle('vault-unlock', async (event, pin) => {
   vault.setAccessToken(acc.token || null, acc.tokenExp || 0);
   try {
     const r = await vault.unlock(acc.uid, pin);
+    touchVaultActivity();
     // One-time import of Flow's pre-vault on-device logins (skips dupes).
     const local = (passwordsStore.get('passwords') || []).map(p => ({ origin: p.origin, username: p.username, password: decPw(p) }));
     const mig = await vault.migrateLocalPasswords(local).catch(() => ({ imported: 0 }));
@@ -1056,17 +1399,17 @@ ipcMain.handle('vault-unlock', async (event, pin) => {
   } catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('vault-lock', () => vault.lock());
-ipcMain.handle('vault-list', () => vault.listItems());
-ipcMain.handle('vault-reveal', (event, id) => vault.reveal(id));
-ipcMain.handle('vault-add', (event, payload) => vault.addItem(payload || {}));
-ipcMain.handle('vault-delete', (event, id) => vault.deleteItem(id));
-ipcMain.handle('vault-sync', () => vault.sync());
+ipcMain.handle('vault-list', () => { touchVaultActivity(); return vault.listItems(); });
+ipcMain.handle('vault-reveal', (event, id) => { touchVaultActivity(); return vault.reveal(id); });
+ipcMain.handle('vault-add', (event, payload) => { touchVaultActivity(); return vault.addItem(payload || {}); });
+ipcMain.handle('vault-delete', (event, id) => { touchVaultActivity(); return vault.deleteItem(id); });
+ipcMain.handle('vault-sync', () => { touchVaultActivity(); return vault.sync(); });
 ipcMain.handle('vault-copy', async (event, id) => {
   const rv = await vault.reveal(id);
   if (rv && rv.ok && typeof rv.value === 'string') {
     clipboard.writeText(rv.value);
-    const settings = settingsStore.get('settings') || {};
-    const clearTime = settings.clipboardClear || 30;
+    touchVaultActivity();
+    const clearTime = Number(settingsStore.get('clipboardClear') ?? 30);
     if (clearTime > 0) {
       if (clipboardClearTimeout) clearTimeout(clipboardClearTimeout);
       clipboardClearTimeout = setTimeout(() => { clipboard.writeText(''); }, clearTime * 1000);
@@ -1214,6 +1557,20 @@ ipcMain.handle('check-for-updates', (_event, options) => updateController.check(
 ipcMain.handle('download-update', () => updateController.download());
 ipcMain.handle('install-update', () => updateController.install());
 ipcMain.handle('get-update-status', () => updateController.status());
+ipcMain.handle('set-update-channel', (_event, channel) => {
+  const next = ['stable', 'beta', 'dev'].includes(channel) ? channel : 'stable';
+  settingsStore.set('updateChannel', next);
+  updateController.setChannel();
+  return settingsStore.data;
+});
+// Re-apply developer emulation (CSS media / throttling) to all live guests.
+ipcMain.handle('apply-dev-emulation', () => {
+  for (const id of guestWebContents) {
+    const wc = webContents.fromId(id);
+    if (wc && !wc.isDestroyed()) applyDevEmulation(wc);
+  }
+  return true;
+});
 
 ipcMain.handle('open-external', (_event, url) => {
   if (!/^https:\/\//i.test(String(url || ''))) return false;
@@ -1390,7 +1747,11 @@ ipcMain.handle('import-installed-browser-bookmarks', async () => {
   return { ok: true, imported, sources: [...new Set(sources.map(item => item.browser))] };
 });
 
-ipcMain.handle('should-block-url', (_event, url) => shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled));
+ipcMain.handle('should-block-url', (_event, url) => {
+  const level = safeBrowsingLevel();
+  if (level !== 'off' && isDangerousUrl(url, level)) return true;
+  return shouldBlockRequest({ url, resourceType: 'mainFrame' }, adBlockerEnabled, trackerBlockingEnabled);
+});
 
 ipcMain.handle('tieddr-sign-in', () => new Promise((resolve) => {
   if (authWin && !authWin.isDestroyed()) { authWin.focus(); return resolve(accountStore.get('account')); }
@@ -1401,7 +1762,10 @@ ipcMain.handle('tieddr-sign-in', () => new Promise((resolve) => {
   authWin = new BrowserWindow({
     parent: mainWindow, width: 480, height: 660, resizable: false, minimizable: false, maximizable: false,
     title: 'Sign in to Tieddr', autoHideMenuBar: true, backgroundColor: '#ffffff',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+    // Use the same persistent session as normal Flowr tabs. The successful
+    // account.tieddr.com SSO cookie is then immediately available browser-wide
+    // to Tieddr Account, Vault, Space, Mavis and other Tieddr web apps.
+    webPreferences: { session: browsingSession, contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   authWin.setMenu(null);
 
@@ -1633,6 +1997,44 @@ ipcMain.handle('clear-browsing-data', async () => {
   return true;
 });
 
+// Cache-only clear (Settings → Data & Storage → "Clear cache") — keeps
+// history, cookies, and site data intact.
+ipcMain.handle('clear-cache', async () => {
+  try { await (browsingSession || session.defaultSession).clearCache(); } catch (_) {}
+  return true;
+});
+
+function dirSize(dirPath, depth = 0) {
+  let total = 0;
+  try {
+    if (depth > 5) return 0;
+    const stat = fs.statSync(dirPath);
+    if (stat.isFile()) return stat.size;
+    for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+      total += dirSize(path.join(dirPath, entry.name), depth + 1);
+    }
+  } catch (_) {}
+  return total;
+}
+
+// Real storage usage for Settings → Data & Storage (bytes).
+ipcMain.handle('get-storage-sizes', async () => {
+  const userData = app.getPath('userData');
+  const partition = INCOGNITO ? 'flow-incognito' : 'flow-main';
+  const profileDir = path.join(userData, 'profiles', currentProfileId);
+  const extensionsDir = dirSize(path.join(userData, 'extensions')) + dirSize(path.join(userData, 'flowr-extensions'));
+  const localStorageDir = dirSize(path.join(userData, 'Partitions', partition, 'Local Storage')) +
+    dirSize(path.join(userData, 'Partitions', partition, 'IndexedDB'));
+  let cacheBytes = 0;
+  try { cacheBytes = Number(await (browsingSession || session.defaultSession).getCacheSize()) || 0; } catch (_) {}
+  return {
+    browsing: dirSize(profileDir) + cacheBytes,
+    extensions: extensionsDir,
+    localStorage: localStorageDir,
+    cache: cacheBytes
+  };
+});
+
 ipcMain.handle('set-default-browser', () => {
   try {
     const okHttp = app.setAsDefaultProtocolClient('http');
@@ -1668,6 +2070,23 @@ ipcMain.handle('update-settings', (event, patch) => {
   Object.entries(patch || {}).forEach(([key, value]) => settingsStore.set(key, value));
   trackerBlockingEnabled = settingsStore.get('blockTrackers') !== false;
   adBlockerEnabled = settingsStore.get('adBlocker') !== false;
+  // Live-apply the toggles that don't need a restart.
+  try {
+    const liveSession = browsingSession || session.defaultSession;
+    if (patch && ('overrideUserAgent' in patch || 'customUserAgent' in patch)) {
+      liveSession.setUserAgent(currentUserAgent(), 'en-US,en;q=0.9');
+    }
+    if (patch && ('spellCheck' in patch) && typeof liveSession.setSpellCheckerEnabled === 'function') {
+      liveSession.setSpellCheckerEnabled(settingsStore.get('spellCheck') !== false);
+    }
+  } catch (_) {}
+  if (patch && ('emulateMediaType' in patch || 'networkThrottling' in patch)) {
+    for (const id of guestWebContents) {
+      const wc = webContents.fromId(id);
+      if (wc && !wc.isDestroyed()) applyDevEmulation(wc);
+    }
+  }
+  if (patch && ('updateChannel' in patch)) updateController.setChannel();
   if (patch && ('privateHistory' in patch || 'historyRetention' in patch || 'autoClearSites' in patch)) {
     const current = readHistory();
     writeHistory(current);

@@ -19,6 +19,57 @@ try {
       }
     });
   }
+
+  // Fingerprint spoofing — report generic, high-entropy-reducing hardware
+  // values instead of the real machine's. Applied once per page.
+  if (privacy.fingerprintProtection) {
+    try {
+      Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, get: () => 4 });
+      Object.defineProperty(navigator, 'deviceMemory', { configurable: true, get: () => 8 });
+    } catch (_) {}
+    try {
+      const patchGetParameter = proto => {
+        if (!proto) return;
+        const original = proto.getParameter;
+        proto.getParameter = function (param) {
+          try {
+            // UNMASKED_VENDOR_WEBGL / UNMASKED_RENDERER_WEBGL
+            if (param === 37445) return 'Intel Inc.';
+            if (param === 37446) return 'Intel Iris OpenGL Engine';
+          } catch (_) {}
+          return original.call(this, param);
+        };
+      };
+      if (window.WebGLRenderingContext) patchGetParameter(WebGLRenderingContext.prototype);
+      if (window.WebGL2RenderingContext) patchGetParameter(WebGL2RenderingContext.prototype);
+    } catch (_) {}
+    try {
+      // Tiny deterministic-ish noise on canvas reads breaks pixel-perfect
+      // canvas fingerprints without visibly changing page graphics.
+      const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+      CanvasRenderingContext2D.prototype.getImageData = function (...args) {
+        const imageData = origGetImageData.apply(this, args);
+        try {
+          const data = imageData.data;
+          for (let i = 0; i < data.length; i += 997) data[i] = Math.min(255, data[i] ^ 1);
+        } catch (_) {}
+        return imageData;
+      };
+    } catch (_) {}
+  }
+
+  // Smart copy — long selections gain a source line when pasted as plain text.
+  if (privacy.smartCopy) {
+    document.addEventListener('copy', event => {
+      try {
+        if (event.clipboardData.getData('text/plain')) return;
+        const selection = String(window.getSelection ? window.getSelection() : '');
+        if (!selection || selection.trim().length < 60) return;
+        event.clipboardData.setData('text/plain', `${selection.replace(/\s+\n/g, '\n')}\n\nSource: ${location.href}`);
+        event.preventDefault();
+      } catch (_) {}
+    }, true);
+  }
 } catch (_) {}
 
 function findFields() {

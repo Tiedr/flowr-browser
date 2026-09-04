@@ -61,13 +61,25 @@ const START_BGS = [
   { id: 'photo-night', label: 'Night Sky', thumb: null, css: 'linear-gradient(rgba(0,0,0,0.15), rgba(0,0,0,0.35)), url(https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80) center/cover no-repeat' },
 ];
 
-// Resolve a theme: base theme + optional accent color override.
-function resolveTheme(themeId, accentId) {
+// Resolve a theme: base theme + optional accent color override + optional
+// high-contrast boost (Settings → Languages & Accessibility).
+function resolveTheme(themeId, accentId, highContrast) {
   const base = THEMES[themeId] || THEMES.flow || THEMES.aurora;
   const preset = ACCENT_PRESETS.find(a => a.id === accentId);
-  if (!preset) return base;
-  // Derive accentSoft from the accent color (10% opacity overlay).
-  return { ...base, accent: preset.color, accentSoft: preset.color + '1a', onAccent: '#ffffff' };
+  let resolved = base;
+  if (preset) {
+    // Derive accentSoft from the accent color (10% opacity overlay).
+    resolved = { ...base, accent: preset.color, accentSoft: preset.color + '1a', onAccent: '#ffffff' };
+  }
+  if (!highContrast) return resolved;
+  const dark = luminance(resolved.bg) < 140;
+  return {
+    ...resolved,
+    text: dark ? '#ffffff' : '#000000',
+    muted: dark ? '#c9ced6' : '#3d434c',
+    faint: dark ? '#a2a9b4' : '#5b626c',
+    border: dark ? '#565e6a' : '#8f97a3'
+  };
 }
 
 const THEMES = {
@@ -155,18 +167,45 @@ function SiteIcon({ url, favicon, theme, size = 18 }) {
   const [err, setErr] = React.useState(false);
   const h = host(url);
   const uri = favicon || (h && h !== 'New Tab' ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(h)}&sz=64` : null);
-  if (err || !uri) return <Globe size={size - 2} color={theme.accent} />;
-  return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: 4 }} onError={() => setErr(true)} />;
+  // Skip re-requesting icons that already failed once this session.
+  if (err || !uri || failedIconUrls.has(uri)) return <Globe size={size - 2} color={theme.accent} />;
+  return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: 4 }} onError={() => { failedIconUrls.add(uri); setErr(true); }} />;
 }
 
-// Glassmorphism style presets — spread as inline styles.
+// Glassmorphism style presets — spread as inline styles. The blur radii are
+// mutated by applyGlassSettings() from App so Settings → Appearance →
+// "Blur intensity" applies everywhere without re-creating the objects.
+const BLUR_BY_INTENSITY = { light: 16, medium: 24, heavy: 32 };
 const GLASS_LIGHT = { backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)' };
 const GLASS_MEDIUM = { backdropFilter: 'blur(24px) saturate(200%)', WebkitBackdropFilter: 'blur(24px) saturate(200%)' };
 const GLASS_HEAVY = { backdropFilter: 'blur(32px) saturate(220%)', WebkitBackdropFilter: 'blur(32px) saturate(220%)' };
+
+function applyGlassSettings(settings = {}) {
+  const px = BLUR_BY_INTENSITY[settings.blurIntensity] || 24;
+  const set = (obj, saturate) => {
+    const value = `blur(${px}px) saturate(${saturate})`;
+    obj.backdropFilter = value;
+    obj.WebkitBackdropFilter = value;
+  };
+  set(GLASS_LIGHT, '180%');
+  set(GLASS_MEDIUM, '200%');
+  set(GLASS_HEAVY, '220%');
+}
+
+// Favicon URLs that already failed once this session — never re-request them.
+const failedIconUrls = new Set();
+
+function luminance(hex) {
+  const h = String(hex || '').replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0');
+  const n = parseInt(full.slice(0, 6), 16);
+  return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+}
 
 export {
   ipc, CHROME_H, BANNER_H, FIND_H, APP_VERSION, EASE, T_BG, HOVER,
   THEMES, ACCENT_PRESETS, START_BGS, ENGINES, PAGES, TIEDDR_APPS,
   resolveTheme, urlOf, host, when, bytes, trunc, storeIdOf,
-  Brand, TieddrMark, VaultMark, SiteIcon, GLASS_LIGHT, GLASS_MEDIUM, GLASS_HEAVY
+  Brand, TieddrMark, VaultMark, SiteIcon, GLASS_LIGHT, GLASS_MEDIUM, GLASS_HEAVY,
+  applyGlassSettings
 };

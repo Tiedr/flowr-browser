@@ -12,6 +12,9 @@ assert.equal(shouldBlockRequest({ url: 'https://cdn.example.net/analytics/collec
 assert.equal(shouldBlockRequest({ url: 'https://news.example.com/analytics/dashboard', initiator: 'https://news.example.com', resourceType: 'mainFrame' }), false);
 assert.equal(shouldBlockRequest({ url: 'https://popads.net/redirect', initiator: 'https://example.com', resourceType: 'mainFrame' }), true);
 assert.equal(shouldBlockRequest({ url: 'https://random-ad-domain.example/landing?clickid=123&zoneid=7', initiator: 'https://example.com', resourceType: 'mainFrame' }), true);
+assert.equal(shouldBlockRequest({ url: 'https://account.tieddr.com/oauth/authorize?redirect_url=https%3A%2F%2Fflowr.tieddr.com', resourceType: 'mainFrame' }), false);
+assert.equal(shouldBlockRequest({ url: 'https://flowr.tieddr.com/promo/redirect?clickid=account', initiator: 'https://account.tieddr.com', resourceType: 'mainFrame' }), false);
+assert.equal(shouldBlockRequest({ url: 'https://doubleclick.net/ad.js', initiator: 'https://space.tieddr.com', resourceType: 'script' }), true);
 assert.equal(shouldBlockRequest({ url: 'https://doubleclick.net/ad.js', resourceType: 'script' }, false), false);
 assert.equal(shouldBlockRequest({ url: 'data:text/plain,ad', resourceType: 'script' }), false);
 

@@ -9,12 +9,19 @@ function releaseNotes(info) {
   return '';
 }
 
-function createUpdateController({ app, autoUpdater, dialog, send, getWindow }) {
+function createUpdateController({ app, autoUpdater, dialog, send, getWindow, getChannel }) {
   let state = { phase: 'idle', currentVersion: app.getVersion(), available: false };
   let offeredVersion = '';
   let promptOnAvailable = false;
   let backgroundDownload = false;
   let initialized = false;
+
+  // Apply the configured update channel ("stable" | "beta" | "dev").
+  const applyChannel = () => {
+    const channel = (typeof getChannel === 'function' && getChannel()) || 'stable';
+    autoUpdater.allowPrerelease = channel !== 'stable';
+    try { autoUpdater.channel = channel === 'stable' ? 'latest' : channel; } catch (_) {}
+  };
 
   const publish = patch => {
     state = { ...state, ...patch, currentVersion: app.getVersion() };
@@ -73,7 +80,7 @@ function createUpdateController({ app, autoUpdater, dialog, send, getWindow }) {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowDowngrade = false;
-    autoUpdater.allowPrerelease = false;
+    applyChannel();
 
     autoUpdater.on('checking-for-update', () => publish({ phase: 'checking', error: '' }));
     autoUpdater.on('update-not-available', info => publish({
@@ -136,6 +143,7 @@ function createUpdateController({ app, autoUpdater, dialog, send, getWindow }) {
     check,
     download: offerDownload,
     install: offerInstall,
+    setChannel: () => { if (initialized) applyChannel(); },
     status: () => state
   };
 }
