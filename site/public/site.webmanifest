@@ -1,1 +1,14 @@
-{"name":"Flowr Browser","short_name":"Flowr","start_url":"/","display":"standalone","background_color":"#f4f2ed","theme_color":"#0b0d0f","icons":[{"src":"/flowr-logo.png","sizes":"512x512","type":"image/png"}]}
+{
+  "name": "Flowr Browser",
+  "short_name": "Flowr",
+  "description": "A private, focused desktop browser by Tieddr.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f2ed",
+  "theme_color": "#0b0d0f",
+  "icons": [
+    { "src": "/flowr-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

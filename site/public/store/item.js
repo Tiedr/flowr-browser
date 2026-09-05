@@ -122,7 +122,8 @@ const items = {
   }
 };
 
-const id = new URLSearchParams(location.search).get('id');
+const pathId = location.pathname.match(/^\/store\/([^/]+)\/?$/)?.[1];
+const id = new URLSearchParams(location.search).get('id') || pathId;
 const x = items[id] || items['flowr-horizons'];
 const q = sel => document.querySelector(sel);
 
