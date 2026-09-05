@@ -1,0 +1,55 @@
+name: Deploy Flowr website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/deploy-website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowr-website-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOKPLOY_URL: https://dock.ughoron.cloud
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+      FLOWR_DOMAIN: flowr.tieddr.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run test:site:seo
+
+      - name: Deploy the Dokploy application connected to flowr.tieddr.com
+        run: node site/scripts/deploy-dokploy.mjs
+
+      - name: Verify the new website is public
+        shell: bash
+        run: |
+          for attempt in $(seq 1 60); do
+            page="$(curl --fail --silent --show-error --max-time 20 \
+              -H 'Cache-Control: no-cache' \
+              "https://${FLOWR_DOMAIN}/privacy/" || true)"
+            if grep -q 'Flowr privacy and security' <<<"$page" && grep -q 'application/ld+json' <<<"$page"; then
+              echo "Flowr website deployment is live."
+              exit 0
+            fi
+            echo "Waiting for the production deployment (${attempt}/60)..."
+            sleep 10
+          done
+          echo "The Dokploy request completed, but the new Flowr site was not publicly visible within 10 minutes."
+          exit 1
