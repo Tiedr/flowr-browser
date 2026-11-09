@@ -23,7 +23,7 @@ jobs:
           - runner: ubuntu-24.04
             command: dist:linux
             artifact: flowr-linux-x64
-          - runner: macos-14
+          - runner: macos-15
             command: dist:mac:all
             artifact: flowr-macos-all
     runs-on: ${{ matrix.runner }}
