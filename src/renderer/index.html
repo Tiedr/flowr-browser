@@ -3,6 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--
+      The app chrome holds the privileged preload: 80+ IPC channels covering the
+      vault, the wallet, account tokens and settings. It also enables webviewTag,
+      and Electron exposes `nodeintegration` / `disablewebsecurity` as settable
+      <webview> attributes. Without a policy, one XSS in this document would be
+      full remote code execution. There is no inline <script> and no innerHTML in
+      the renderer, so script-src 'self' costs nothing.
+
+      style-src allows 'unsafe-inline' because react-native-web and style-loader
+      both inject <style> elements at runtime; that is style-only, not script.
+      img-src and connect-src stay open because the UI shows remote favicons
+      and Unsplash start-page backgrounds.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: blob: https:;
+        font-src 'self' data:;
+        connect-src 'self' https: wss:;
+        media-src 'self' blob: data:;
+        frame-src 'self' blob: data:;
+        object-src 'none';
+        base-uri 'none';
+        form-action 'none';
+        frame-ancestors 'none';
+    ">
     <title>Flowr Browser</title>
     <style>
         html, body, #root {
@@ -84,24 +111,6 @@
         [data-tabclosing] { animation: tabClose .22s cubic-bezier(.4,0,1,1) forwards; pointer-events: none; overflow: hidden; }
         @keyframes suggestionFadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
         @media (prefers-reduced-motion: reduce) { .suggestion-item { transition: none; } }
-        
-        /* Extension dropdown styles */
-        .ext-dropdown { position: absolute; top: 100%; right: 0; width: 280px; border-radius: 10px; border: 1px solid; box-shadow: 0 12px 40px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; animation: suggestionFadeIn 0.2s ease; }
-        .ext-dropdown-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid; }
-        .ext-dropdown-title { font-size: 13px; font-weight: 600; }
-        .ext-dropdown-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; transition: background-color 0.1s ease; }
-        .ext-dropdown-item-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
-        .ext-dropdown-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        .ext-dropdown-item-info { flex: 1; min-width: 0; }
-        .ext-dropdown-item-name { font-size: 13px; font-weight: 500; }
-        .ext-dropdown-item-desc { font-size: 11px; margin-top: 2px; }
-        .ext-dropdown-actions { display: flex; align-items: center; gap: 8px; }
-        .ext-dropdown-toggle { width: 28px; height: 16px; border-radius: 8px; position: relative; cursor: pointer; }
-        .ext-dropdown-toggle-dot { width: 12px; height: 12px; border-radius: 6px; position: absolute; top: 2px; left: 2px; transition: transform 0.15s ease; }
-        .ext-dropdown-action { padding: 4px; cursor: pointer; }
-        .ext-dropdown-footer { padding: 10px 14px; border-top: 1px solid; }
-        .ext-dropdown-footer-link { cursor: pointer; }
-        .ext-dropdown-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 14px; }
         
         /* Settings animations */
         .settings-hero { display: flex; align-items: center; gap: 16px; padding: 24px 0; border-bottom: 1px solid; margin-bottom: 24px; animation: settingsFadeIn 0.3s ease; }

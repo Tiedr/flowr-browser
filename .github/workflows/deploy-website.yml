@@ -33,6 +33,7 @@ jobs:
 
       - run: npm ci
       - run: npm run test:site:seo
+      - run: node site/scripts/check-download-config.mjs
 
       - name: Deploy the Dokploy application connected to flowr.tieddr.com
         run: node site/scripts/deploy-dokploy.mjs
@@ -53,3 +54,6 @@ jobs:
           done
           echo "The Dokploy request completed, but the new Flowr site was not publicly visible within 10 minutes."
           exit 1
+
+      - name: Submit updated URLs to IndexNow
+        run: node site/scripts/submit-indexnow.mjs

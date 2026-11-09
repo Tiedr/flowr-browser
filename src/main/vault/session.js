@@ -19,13 +19,11 @@ function getSession() { return key ? { uid, key } : null; }
 function isUnlocked() { return !!key; }
 
 function lock() {
-  if (key) {
-    // Clear sensitive data from memory
-    if (key.extractable === false) {
-      try { key.zeroization = true; } catch (_) {}
-    }
-    key = null;
-  }
+  // Drop the key reference and stop the timer. (WebCrypto CryptoKeys are
+  // managed by the runtime and cannot be wiped by JS — previous "zeroization"
+  // code was theater; honest nulling + timer cleanup is the real guarantee,
+  // plus the OS page lock once the process exits.)
+  key = null;
   uid = null;
   failedAttempts = 0;
   if (timer) clearTimeout(timer);
@@ -39,6 +37,9 @@ function armAutoLock(minutes) {
 }
 
 function getFailedAttempts() { return failedAttempts; }
+// Hydrate the in-memory counter from persisted lock state (see index.js),
+// so restarts don't reset the visible attempt count.
+function setFailedAttempts(n) { failedAttempts = Math.max(0, Math.floor(Number(n) || 0)); }
 function incrementFailedAttempts() {
   failedAttempts++;
   if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
@@ -49,4 +50,4 @@ function incrementFailedAttempts() {
   return false;
 }
 
-module.exports = { onLock, setSession, getSession, isUnlocked, lock, armAutoLock, getFailedAttempts, incrementFailedAttempts };
+module.exports = { onLock, setSession, getSession, isUnlocked, lock, armAutoLock, getFailedAttempts, setFailedAttempts, incrementFailedAttempts };

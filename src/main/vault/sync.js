@@ -17,8 +17,11 @@ const META_COLL = APPWRITE.metaCollectionId;
 async function docId(uid, itemId) {
   return (await sha256Hex(`${uid}:${itemId}`)).slice(0, 36);
 }
-async function haveTransport(jwt) {
-  return !!jwt || !!APPWRITE.apiKey;
+// JWT-only transport. There is intentionally no API-key fallback: a key
+// embedded in the packaged app is extractable from the asar and would grant
+// broad database access. Without a per-user JWT, the vault stays local-only.
+function haveTransport(jwt) {
+  return !!jwt;
 }
 
 async function syncNow(uid, key) {
@@ -142,4 +145,4 @@ function failure(e, byId) {
   return { status: "error", pulled: 0, pushed: 0, items, error: e && e.message };
 }
 
-module.exports = { syncNow, pushItem, pushTombstone, fetchVaultMeta };
+module.exports = { syncNow, pushItem, pushTombstone, fetchVaultMeta, pushMeta };

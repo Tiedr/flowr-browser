@@ -1,7 +1,7 @@
 {
   "name": "flow-browser",
-  "version": "1.1.8",
-  "description": "A minimal, fast, and secure web browser built with React Native and Electron.",
+  "version": "1.2.0",
+  "description": "A calm, private, and focused desktop browser by Tieddr.",
   "author": "Flowr Browser Team",
   "main": "src/main/main.js",
   "scripts": {
@@ -10,18 +10,32 @@
     "dev": "concurrently \"npm start\" \"npm run electron\"",
     "build": "webpack --config webpack.renderer.config.js --mode production",
     "test:adblock": "node tests/adblock.test.js",
+    "test:adaptive-adblock": "node tests/adaptive-adblock.test.js",
+    "test:site-apps": "node tests/site-apps.test.js",
     "test:updater": "node tests/updater.test.js",
     "test:importer": "node tests/importer.test.js",
     "test:privacy": "node tests/privacy.test.js",
     "test:navigation": "node tests/navigation.test.js",
     "test:account-session": "node tests/account-session.test.js",
+    "test:browser-identity": "node tests/browser-identity.test.js",
+    "test:site:downloads": "node tests/site-downloads.test.js",
+    "test:startup-package": "node tests/startup-package.test.js",
+    "test:vault-pin": "node tests/vault-pin.test.js",
+    "test:security": "node tests/security.test.js",
+    "test": "node tests/adblock.test.js && node tests/adaptive-adblock.test.js && node tests/site-apps.test.js && node tests/updater.test.js && node tests/importer.test.js && node tests/privacy.test.js && node tests/navigation.test.js && node tests/account-session.test.js && node tests/browser-identity.test.js && node tests/site-downloads.test.js && node tests/startup-package.test.js && node tests/vault-pin.test.js && node tests/security.test.js && node tests/themes.test.js && node tests/store.test.js",
     "test:site:seo": "node site/scripts/generate-store-pages.mjs && node site/scripts/audit-seo.mjs",
-    "dist": "npm run build && electron-builder",
-    "dist:win:update": "npm run build && electron-builder --win nsis --x64 --publish never",
-    "dist:linux": "npm run build && electron-builder --linux AppImage --x64 --publish never",
-    "dist:mac:all": "npm run build && electron-builder --mac dmg zip --x64 --arm64 --publish never",
-    "dist:mac:x64": "npm run build && electron-builder --mac dmg zip --x64 --publish never",
-    "dist:mac:arm64": "npm run build && electron-builder --mac dmg zip --arm64 --publish never"
+    "lint:site": "node --check site/public/app.js && node --check site/public/auth-config.js && node --check site/public/store/store.js && node --check site/public/store/item.js && node --check site/scripts/submit-indexnow.mjs && node --check site/scripts/check-download-config.mjs",
+"lint:main": "node --check src/main/main.js && node --check src/main/preload.js && node --check src/main/viewpreload.js && node --check src/main/store.js && node --check src/main/paths.js && node --check src/main/crx.js && node --check src/main/updater.js && node --check src/main/adblock.js && node --check src/main/privacy.js && node --check src/main/importer.js && node --check src/main/site-apps.js && node --check src/main/browser-identity.js && node --check src/shared/theme-settings.js",
+    "lint": "npm run lint:main && npm run lint:site",
+    "verify": "npm run lint && npm test && npm run test:site:seo",
+    "preflight": "node scripts/preflight-release.mjs",
+    "stage:nsis": "node scripts/nsis/stage.js",
+    "dist": "npm run build && npm run preflight && npm run stage:nsis && electron-builder",
+    "dist:win:update": "npm run build && npm run preflight -- windows && npm run stage:nsis && cross-env ELECTRON_BUILDER_NSIS_DIR=scripts/nsis electron-builder --win nsis --x64 --publish never",
+    "dist:linux": "npm run build && npm run preflight -- linux && npm run stage:nsis && cross-env ELECTRON_BUILDER_NSIS_DIR=scripts/nsis electron-builder --linux AppImage tar.gz --x64 --publish never",
+    "dist:mac:all": "npm run build && npm run preflight -- mac && npm run stage:nsis && cross-env ELECTRON_BUILDER_NSIS_DIR=scripts/nsis electron-builder --mac dmg zip --x64 --arm64 --publish never",
+    "dist:mac:x64": "npm run build && npm run preflight -- mac && npm run stage:nsis && cross-env ELECTRON_BUILDER_NSIS_DIR=scripts/nsis electron-builder --mac dmg zip --x64 --publish never",
+    "dist:mac:arm64": "npm run build && npm run preflight -- mac && npm run stage:nsis && cross-env ELECTRON_BUILDER_NSIS_DIR=scripts/nsis electron-builder --mac dmg zip --arm64 --publish never"
   },
   "build": {
     "appId": "com.flow.browser",
@@ -43,17 +57,29 @@
     "files": [
       "dist/**/*",
       "src/main/**/*",
+      "src/shared/**/*",
       "!src/main/**/config.local.js",
       "!src/main/**/*.local.js",
       "package.json",
       "build/icons/flowr-transparent.png"
+    ],
+    "electronLanguages": [
+      "en-US",
+      "de",
+      "es",
+      "fr",
+      "ja",
+      "ko",
+      "pt-BR",
+      "ru",
+      "zh-CN"
     ],
     "win": {
       "icon": "build/icons/flowr-transparent.png",
       "target": [
         "nsis"
       ],
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": true
     },
     "nsis": {
       "oneClick": true,
@@ -76,7 +102,8 @@
       "category": "Network;WebBrowser",
       "synopsis": "A calmer, private browser by Tieddr",
       "target": [
-        "AppImage"
+        "AppImage",
+        "tar.gz"
       ]
     }
   },

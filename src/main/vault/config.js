@@ -1,6 +1,3 @@
-let APPWRITE_API_KEY = "";
-try { APPWRITE_API_KEY = require("./config.local.js").APPWRITE_API_KEY || ""; } catch (_) { /* no local key → local-only */ }
-
 /**
  * Tieddr ecosystem endpoints for the Tieddr Vault built into Flow Browser.
  * Same Appwrite project + `vault` database + collections as the mobile app,
@@ -17,11 +14,11 @@ const TIEDDR = {
  * Appwrite — the Vault's own `vault` database, used ONLY as an opaque encrypted
  * mirror (every synced document holds AES-256-GCM ciphertext).
  *
- * SECURITY: `apiKey` is the sync transport until a per-user Tieddr-Account →
- * Appwrite JWT is available. It lives in `config.local.js` (gitignored), is NOT
- * committed, and Flow additionally holds only ciphertext on disk. Replace with a
- * scoped key / token-exchange before public release. Null → Flow's vault is
- * local-only (no sync).
+ * SECURITY: sync transport is JWT-only. Flow mints a per-user Appwrite JWT
+ * from the Tieddr Account access token via the vault-sso bridge (see
+ * account.js). No API key is read, embedded, or sent — a key shipped inside
+ * the packaged app would be extractable from the asar. No JWT → the vault
+ * stays local-only (no sync).
  */
 const APPWRITE = {
   endpoint: "https://appwriteone.ughoron.cloud/v1",
@@ -34,7 +31,6 @@ const APPWRITE = {
   // sync execution to mint a per-user Appwrite JWT — no admin key on the client.
   // See account.js `mintAppwriteJwt`.
   vaultSsoFn: "vault-sso",
-  apiKey: APPWRITE_API_KEY || null,
 };
 
 const AUTO_LOCK_MINUTES = 15;
