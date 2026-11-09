@@ -31,11 +31,11 @@
     "preflight": "node scripts/preflight-release.mjs",
     "stage:nsis": "node scripts/nsis/stage.js",
     "dist": "npm run build && npm run preflight && electron-builder",
-    "dist:win:update": "npm run build && npm run preflight -- windows electron-builder --win nsis --x64 --publish never",
-    "dist:linux": "npm run build && npm run preflight -- linux electron-builder --linux AppImage tar.gz --x64 --publish never",
-    "dist:mac:all": "npm run build && npm run preflight -- mac electron-builder --mac dmg zip --x64 --arm64 --publish never",
-    "dist:mac:x64": "npm run build && npm run preflight -- mac electron-builder --mac dmg zip --x64 --publish never",
-    "dist:mac:arm64": "npm run build && npm run preflight -- mac electron-builder --mac dmg zip --arm64 --publish never"
+    "dist:win:update": "npm run build && npm run preflight -- windows && electron-builder --win nsis --x64 --publish never",
+    "dist:linux": "npm run build && npm run preflight -- linux && electron-builder --linux AppImage tar.gz --x64 --publish never",
+    "dist:mac:all": "npm run build && npm run preflight -- mac && electron-builder --mac dmg zip --x64 --arm64 --publish never",
+    "dist:mac:x64": "npm run build && npm run preflight -- mac && electron-builder --mac dmg zip --x64 --publish never",
+    "dist:mac:arm64": "npm run build && npm run preflight -- mac && electron-builder --mac dmg zip --arm64 --publish never"
   },
   "build": {
     "appId": "com.flow.browser",

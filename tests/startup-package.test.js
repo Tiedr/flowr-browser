@@ -9,5 +9,8 @@ assert.match(source, /const version = app\.getVersion\(\);/, 'Use Electron’s p
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
 assert.ok(pkg.build.files.includes('package.json'), 'Electron must package the app manifest');
 assert.match(pkg.scripts['dist:linux'], /preflight -- linux/, 'Linux packaging must not require a Windows signing certificate');
+for (const name of ['dist:win:update', 'dist:linux', 'dist:mac:all', 'dist:mac:x64', 'dist:mac:arm64']) {
+  assert.match(pkg.scripts[name], /&& electron-builder --/, `${name} must execute electron-builder after preflight`);
+}
 
 console.log('Flowr packaged-startup regression checks passed.');
