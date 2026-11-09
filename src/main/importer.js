@@ -16,8 +16,8 @@ function parseCsv(text) {
   return rows;
 }
 
-function parsePasswordCsv(text) {
-  const rows = parseCsv(text);
+function parsePasswordCsv(text, { maxRows = 5000 } = {}) {
+  const rows = parseCsv(String(text || '').slice(0, 5 * 1024 * 1024));
   if (rows.length < 2) return [];
   const headers = rows[0].map(value => value.trim().toLowerCase());
   const column = (...names) => names.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1;
@@ -26,7 +26,7 @@ function parsePasswordCsv(text) {
   const usernameIndex = column('username', 'user', 'login_username');
   const passwordIndex = column('password', 'login_password');
   if (passwordIndex < 0) return [];
-  return rows.slice(1).map(values => ({
+  return rows.slice(1, maxRows + 1).map(values => ({
     title: nameIndex >= 0 ? values[nameIndex] : '',
     url: urlIndex >= 0 ? values[urlIndex] : '',
     username: usernameIndex >= 0 ? values[usernameIndex] : '',
@@ -39,9 +39,9 @@ function decodeHtml(value) {
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
-function parseBookmarkHtml(text) {
+function parseBookmarkHtml(text, { maxItems = 10000 } = {}) {
   const bookmarks = [];
-  const source = String(text || '');
+  const source = String(text || '').slice(0, 10 * 1024 * 1024);
   const pattern = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let match;
   while ((match = pattern.exec(source))) {
@@ -49,6 +49,7 @@ function parseBookmarkHtml(text) {
     if (!/^https?:\/\//i.test(url)) continue;
     const title = decodeHtml(match[2].replace(/<[^>]+>/g, '').trim()) || url;
     bookmarks.push({ url, title });
+    if (bookmarks.length >= maxItems) break;
   }
   return bookmarks;
 }

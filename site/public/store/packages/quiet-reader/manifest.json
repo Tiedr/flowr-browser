@@ -1,1 +1,11 @@
-{"manifest_version":3,"name":"Quiet Reader","version":"1.0.0","description":"Turn the current article into a quiet, adjustable reading surface.","permissions":["activeTab","scripting"],"background":{"service_worker":"service.js"},"action":{"default_title":"Open Quiet Reader"}}
+{
+  "manifest_version": 3,
+  "name": "Quiet Reader",
+  "version": "1.0.0",
+  "description": "Turn the current article into a quiet, adjustable reading surface.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_title": "Open Quiet Reader",
+    "default_popup": "popup.html"
+  }
+}

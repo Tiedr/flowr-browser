@@ -127,8 +127,20 @@ const id = new URLSearchParams(location.search).get('id') || pathId;
 const x = items[id] || items['flowr-horizons'];
 const q = sel => document.querySelector(sel);
 
+// Flowr presents a Chrome-compatible user agent plus its own product token
+// ("Flowr/1.2.0"), the same way Brave, Vivaldi and Opera identify themselves.
+// Matching on that token is what makes the install deep link reachable at all —
+// with a plain spoofed Chrome UA every theme and extension button dead-ended on
+// "Get Flowr to install" and the install path could never be exercised.
 const ua = (navigator.userAgent || '').toLowerCase();
-const isFlowrBrowser = /electron|flowr/.test(ua);
+const isFlowrBrowser = /\bflowr\//.test(ua);
+
+// Absolute URLs on purpose: the install stub is matched on its full path by the
+// app, so it has to resolve to the same origin regardless of whether the store
+// was served from the domain root, a sub-path, or opened from a file:// copy.
+const ORIGIN = 'https://flowr.tieddr.com';
+const installUrl = (page, manifestPath) =>
+  `${ORIGIN}/store/${page}?manifest=${encodeURIComponent(`${ORIGIN}${manifestPath}`)}`;
 
 document.title = `${x.name} — Flowr Store`;
 q('#name').textContent = x.name;
@@ -162,21 +174,31 @@ if (x.preview) {
   install.style.color = '#777d8a';
   flowrOnly.hidden = true;
 } else if (x.extensionManifest) {
-  const manifest = `https://flowr.tieddr.com${x.extensionManifest}`;
-  install.href = isFlowrBrowser ? `/store/install-extension.html?manifest=${encodeURIComponent(manifest)}` : `/#download`;
+  const target = isFlowrBrowser
+    ? installUrl('install-extension.html', x.extensionManifest)
+    : `${ORIGIN}/#download`;
+  install.href = target;
   if (!isFlowrBrowser) {
     install.textContent = 'Get Flowr to install';
+    install.setAttribute('aria-label', `Get Flowr Browser to install ${x.name}`);
+  } else {
+    install.setAttribute('aria-label', `Install ${x.name} in Flowr`);
   }
   flowrOnly.hidden = isFlowrBrowser;
 } else {
-  const manifest = `https://flowr.tieddr.com${x.manifest}`;
-  install.href = isFlowrBrowser ? `/store/install-theme.html?manifest=${encodeURIComponent(manifest)}` : `/#download`;
+  const target = isFlowrBrowser
+    ? installUrl('install-theme.html', x.manifest)
+    : `${ORIGIN}/#download`;
+  install.href = target;
   if (!isFlowrBrowser) {
     install.textContent = 'Get Flowr to install';
+    install.setAttribute('aria-label', `Get Flowr Browser to install ${x.name}`);
+  } else {
+    install.setAttribute('aria-label', `Install ${x.name} in Flowr`);
   }
   flowrOnly.hidden = isFlowrBrowser;
 }
 
 if (!flowrOnly.hidden) {
-  q('#flowr-only-cta').href = '/#download';
+  q('#flowr-only-cta').href = `${ORIGIN}/#download`;
 }

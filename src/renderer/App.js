@@ -331,7 +331,7 @@ const RECOMMENDED_SHORTCUTS = [
   { title: 'Mavis', url: 'https://mavis.tieddr.com' }
 ];
 
-function FlowrStart({ go, open, bookmarks, account, theme, topSites }) {
+function FlowrStart({ go, open, bookmarks, account, theme, topSites, apps, openApp }) {
   const [query, setQuery] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [news, setNews] = useState({ loading: true, items: [] });
@@ -355,6 +355,7 @@ function FlowrStart({ go, open, bookmarks, account, theme, topSites }) {
       <Text style={{ color: ink, fontSize: 76, lineHeight: 88, fontWeight: '300', letterSpacing: -4.5, marginTop: 3 }}>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
       <View style={{ width: '100%', maxWidth: 720, height: 58, borderRadius: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, gap: 12, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOpacity: light ? .08 : .28, shadowRadius: 28, shadowOffset: { width: 0, height: 14 } }} {...GLASS_HEAVY}><Search size={19} color={softInk} /><TextInput value={query} onChangeText={setQuery} onSubmitEditing={submit} placeholder="Search or enter an address" placeholderTextColor={softInk} autoCapitalize="none" style={{ flex: 1, color: ink, fontSize: 15, outlineStyle: 'none' }} />{query ? <TouchableOpacity onPress={submit} style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}><ArrowRight size={16} color={theme.onAccent} /></TouchableOpacity> : null}</View>
       <View style={{ width: '100%', maxWidth: 720, marginTop: 22 }}><Text style={{ color: softInk, fontSize: 9.5, fontWeight: '850', letterSpacing: 1.25, textAlign: 'center', marginBottom: 7 }}>{topSites?.length >= 4 ? 'FREQUENTLY USED' : 'RECOMMENDED'}</Text><View style={{ flexDirection: 'row', justifyContent: 'center', gap: 9 }}>{shortcuts.slice(0, 6).map(item => <TouchableOpacity key={item.url} onPress={() => go(item.url)} style={{ width: 100, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 14 }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, backgroundColor: glass, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}><SiteIcon url={item.url} favicon={item.favicon} theme={theme} size={17} /></View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 7, width: '100%', textAlign: 'center' }}>{item.title || host(item.url)}</Text></TouchableOpacity>)}</View></View>
+      {apps?.length ? <View style={{ width: '100%', maxWidth: 720, marginTop: 18 }}><Text style={{ color: softInk, fontSize: 9.5, fontWeight: '850', letterSpacing: 1.25, textAlign: 'center', marginBottom: 7 }}>YOUR APPS</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 9 }}>{apps.slice(0, 6).map(item => <TouchableOpacity key={item.id || item.url} onPress={() => openApp(item)} style={{ width: 100, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 8, borderRadius: 14, backgroundColor: glass, borderWidth: 1, borderColor: theme.border }} dataSet={HOVER}><View style={{ width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }}>{item.icon ? <Image source={{ uri: item.icon }} style={{ width: 25, height: 25, borderRadius: 7 }} /> : <SiteIcon url={item.url} theme={theme} size={19} />}</View><Text numberOfLines={1} style={{ color: softInk, fontSize: 10.5, fontWeight: '650', marginTop: 6, width: '100%', textAlign: 'center' }}>{item.name || host(item.url)}</Text></TouchableOpacity>)}</View></View> : null}
     </View>
     <View style={{ position: 'absolute', left: 32, right: 32, bottom: 24, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 16, zIndex: 3 }}><TouchableOpacity onPress={() => open('bookmarks')} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Star size={14} color={softInk} /><Text style={{ color: softInk, fontSize: 11.5, fontWeight: '700' }}>Bookmarks</Text></TouchableOpacity><View style={{ width: 1, height: 18, backgroundColor: theme.border }} />{news.items?.[0] ? <TouchableOpacity onPress={() => go(news.items[0].url)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 }}><Text style={{ color: theme.accent, fontSize: 9.5, fontWeight: '850', letterSpacing: 1 }}>TIEDDR NEWS</Text><Text numberOfLines={1} style={{ flex: 1, color: softInk, fontSize: 11.5 }}>{news.items[0].title}</Text></TouchableOpacity> : <View style={{ flex: 1 }} />}<Text style={{ color: theme.faint, fontSize: 10.5 }}>A quiet place to begin.</Text></View>
   </View>;
@@ -948,6 +949,7 @@ const SET_SECTIONS = [
   { id: 'account', label: 'Account', icon: TieddrMark },
   { id: 'privacy', label: 'Privacy & Security', icon: Shield },
   { id: 'performance', label: 'Performance', icon: Gauge },
+  { id: 'apps', label: 'Apps & Permissions', icon: LayoutGrid },
   { id: 'tabs', label: 'Tabs & Startup', icon: Layers },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'languages', label: 'Languages & Accessibility', icon: Languages },
@@ -964,7 +966,7 @@ const SET_GROUPS = [
   { label: 'Account', ids: ['account'] },
   { label: 'Privacy & Security', ids: ['privacy'] },
   { label: 'Performance', ids: ['performance'] },
-  { label: 'Browser', ids: ['tabs', 'appearance', 'languages'] },
+  { label: 'Browser', ids: ['apps', 'tabs', 'appearance', 'languages'] },
   { label: 'Data & System', ids: ['data', 'developer', 'system', 'updates'] },
   { label: 'Manage', ids: ['extensions', 'reset', 'about'] }
 ];
@@ -998,7 +1000,7 @@ function PasswordRow({ p, onReveal, onCopy, onDelete, theme }) {
   );
 }
 
-function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onDone, theme }) {
+function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onAutoImport, onSignIn, onDone, theme }) {
   const [step, setStep] = useState(0);
   const features = [
     { icon: ShieldCheck, title: 'Private by design', text: 'Encrypted history, tracker protection, redirect controls, and Vault-backed browser locks.' },
@@ -1039,7 +1041,7 @@ function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onD
         <Text style={{ color: theme.faint, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 }}>STEP {step + 1} OF {steps.length}</Text>
         <Text style={{ color: theme.text, fontSize: 26, lineHeight: 32, fontWeight: '760', letterSpacing: -.7, marginTop: 15 }}>{step === 0 ? (firstRun ? 'Let’s make Flowr yours.' : 'See what changed.') : step === 1 ? (firstRun ? 'Bring your essentials.' : 'Work across tabs.') : step === 2 ? (firstRun ? 'Connect your Tieddr Account.' : 'A calmer, smarter workspace.') : 'Everything is ready.'}</Text>
         <Text style={{ color: theme.muted, fontSize: 13.5, lineHeight: 21, marginTop: 9, marginBottom: 24 }}>{current.text}</Text>
-        {step === 1 && firstRun ? <><TouchableOpacity onPress={onImport} style={[s.primary, { width: '100%', justifyContent: 'center', backgroundColor: theme.accent }]}><Upload size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Choose files to import</Text></TouchableOpacity>{!vaultUnlocked ? <Text style={{ color: theme.faint, fontSize: 10.5, textAlign: 'center', lineHeight: 16, marginTop: 10 }}>Unlock Vault before importing password CSV files.</Text> : null}</> : null}
+        {step === 1 && firstRun ? <><TouchableOpacity onPress={onAutoImport} style={[s.primary, { width: '100%', justifyContent: 'center', backgroundColor: theme.accent }]}><Download size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Import from this device</Text></TouchableOpacity><TouchableOpacity onPress={onImport} style={[s.action, { width: '100%', justifyContent: 'center', backgroundColor: theme.soft, borderColor: theme.border }]}><Upload size={16} color={theme.text} /><Text style={[s.actionText, { color: theme.text }]}>Choose files to import</Text></TouchableOpacity><Text style={{ color: theme.faint, fontSize: 10.5, textAlign: 'center', lineHeight: 16, marginTop: 10 }}>Bookmarks import automatically. Passwords always need Vault unlocked, because browsers protect them from silent access.</Text></> : null}
         {step === 2 && firstRun ? (!account ? <TouchableOpacity onPress={onSignIn} style={[s.primary, { width: '100%', justifyContent: 'center', backgroundColor: theme.accent }]}><LogIn size={16} color={theme.onAccent} /><Text style={[s.primaryText, { color: theme.onAccent }]}>Connect Tieddr Account</Text></TouchableOpacity> : <View style={[s.action, { width: '100%', justifyContent: 'center', backgroundColor: theme.soft, borderColor: theme.border }]}><UserCheck size={16} color={theme.success} /><Text style={[s.actionText, { color: theme.text }]}>{account.name || account.email} connected</Text></View>) : null}
         {(!firstRun || step === 3) ? features.slice(0, step === 3 ? 3 : 2).map(({ icon: Icon, title }, index) => <View key={title} dataSet={{ welcomestep: String(index) }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.border }}><Icon size={16} color={theme.accent} /><Text style={{ color: theme.text, fontSize: 13, fontWeight: '650' }}>{title}</Text></View>) : null}
       </View>
@@ -1054,7 +1056,7 @@ function WelcomePage({ firstRun, account, vaultUnlocked, onImport, onSignIn, onD
 
 const SettingsGlassContext = React.createContext(true);
 
-function SettingsPage({ settings, profiles, active, update: persistSettings, createProfile, switchProfile, openPage, go, clearData, setDefault, chooseDownloads, reset, account, onSignIn, onSignOut, onImport, passwords, onRevealPw, onCopyPw, onDeletePw, pwEncAvail, theme, biometricAvailable, changeVaultPin, storageSizes, clearCache }) {
+function SettingsPage({ settings, profiles, active, update: persistSettings, createProfile, switchProfile, openPage, go, clearData, setDefault, chooseDownloads, reset, account, onSignIn, onSignOut, onImport, onAutoImport, passwords, onRevealPw, onCopyPw, onDeletePw, pwEncAvail, theme, biometricAvailable, changeVaultPin, storageSizes, clearCache, removeTheme, storeUrl, openSiteApp, removeSiteApp }) {
   const [section, setSection] = useState('account');
   const [name, setName] = useState('');
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -1074,6 +1076,17 @@ function SettingsPage({ settings, profiles, active, update: persistSettings, cre
   }, [persistSettings]);
   useEffect(() => () => clearTimeout(saveTimerRef.current), []);
   useEffect(() => ipc?.on('update-status', status => setUpdateStatus(status)), []);
+  const [sitePermissions, setSitePermissions] = useState([]);
+  useEffect(() => {
+    if (section !== 'apps') return undefined;
+    ipc?.invoke('get-site-permissions').then(items => setSitePermissions(items || []));
+    const unsubscribe = ipc?.on('site-permissions-changed', items => setSitePermissions(items || []));
+    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+  }, [section]);
+  const changeSitePermission = async (origin, permission, decision) => {
+    const items = await ipc.invoke('set-site-permission', { origin, permission, decision });
+    setSitePermissions(items || []);
+  };
   const checkUpdate = async () => {
     setCheckingUpdate(true);
     const result = await ipc?.invoke('check-for-updates', { promptOnAvailable: false, backgroundDownload: false });
@@ -1114,8 +1127,11 @@ function SettingsPage({ settings, profiles, active, update: persistSettings, cre
             </Card>
           )}
           <Card title="Import browser data" icon={Upload} theme={theme}>
-            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Import bookmark HTML or a supported browser bookmark export. Export passwords as CSV from your current browser, then unlock Vault before importing.</Text>
-            <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={onImport}><FolderInput size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Choose browser export files</Text></TouchableOpacity>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Move across from Chrome, Edge, Brave, Vivaldi, Opera or Chromium in one step, or import bookmark HTML and a password CSV by hand. Passwords are only accepted once your encrypted Vault is unlocked.</Text>
+            <View style={{ gap: 10, width: '100%' }}>
+              <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={onAutoImport}><Download size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Detect browsers on this device</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.action, { backgroundColor: theme.panel, borderColor: theme.border }]} onPress={onImport}><FolderInput size={16} color={theme.accent} /><Text style={[s.actionText, { color: theme.accent }]}>Choose browser export files</Text></TouchableOpacity>
+            </View>
           </Card>
           <Card title="Tieddr ecosystem" icon={LayoutGrid} theme={theme}>
             <Text style={[s.rs, { color: theme.muted, marginBottom: 10, lineHeight: 19 }]}>Tieddr is a connected suite of apps. Your Tieddr Account links them all.</Text>
@@ -1144,7 +1160,8 @@ function SettingsPage({ settings, profiles, active, update: persistSettings, cre
       case 'privacy':
         return (<>
           <Card title="Privacy and security" icon={Shield} theme={theme}>
-            <Toggle label="Ad blocker" detail="Built-in blocker for ads, trackers, and cryptominers. Blocks 50+ ad networks." value={settings.adBlocker !== false} onPress={() => update({ adBlocker: settings.adBlocker === false })} theme={theme} />
+            <Toggle label="Ad blocker" detail="On by default. Blocks known ad networks, cryptominers and ad-heavy redirects." value={settings.adBlocker !== false} onPress={() => update({ adBlocker: settings.adBlocker === false })} theme={theme} />
+            <Toggle label="Adaptive page protection" detail={adBlockStatus.total > 0 ? `${adBlockStatus.total} ad${adBlockStatus.total === 1 ? '' : 's'} blocked on ${adBlockStatus.site}; ${adBlockStatus.count} in the latest scan. Stable site rules are remembered locally.` : 'Understands page structure to catch ads that bypass network filtering, watches for newly injected ads, and learns stable site rules locally.'} value={settings.adaptiveAdBlocker !== false} onPress={() => update({ adaptiveAdBlocker: settings.adaptiveAdBlocker === false })} theme={theme} />
             <Toggle label="Block common trackers" detail="Cancel known analytics and tracking requests." value={settings.blockTrackers !== false} onPress={() => update({ blockTrackers: settings.blockTrackers === false })} theme={theme} />
             <Toggle label="Always use HTTPS" detail="Upgrade sites to a secure connection when possible." value={!!settings.httpsOnly} onPress={() => update({ httpsOnly: !settings.httpsOnly })} theme={theme} />
             <Toggle label={'Send \u201CDo Not Track\u201D request'} detail="Ask sites not to track your browsing." value={!!settings.doNotTrack} onPress={() => update({ doNotTrack: !settings.doNotTrack })} theme={theme} />
@@ -1266,6 +1283,46 @@ function SettingsPage({ settings, profiles, active, update: persistSettings, cre
               )))}
             </View>
           </Card>
+          <Card title="Installed themes" icon={Sparkles} theme={theme}>
+            {!(settings.installedThemes || []).length ? (
+              <Text style={[s.rs, { color: theme.muted, lineHeight: 19 }]}>No Flowr Store themes installed yet. Open the Flowr Store, pick a theme, and choose Install — it appears here and can be re-applied or removed.</Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {(settings.installedThemes || []).map(installedTheme => {
+                  const hero = (installedTheme.images || [])[0];
+                  const active = !!hero && settings.customBackgroundUrl === hero;
+                  return (
+                    <View key={installedTheme.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: active ? theme.accent : theme.border, backgroundColor: theme.soft }}>
+                      <View style={{ width: 56, height: 40, borderRadius: 8, overflow: 'hidden', backgroundColor: theme.strong, backgroundImage: hero ? `url(${hero})` : undefined, backgroundPosition: 'center', backgroundSize: 'cover' }} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontSize: 13.5, fontWeight: '650', color: theme.text }} numberOfLines={1}>{installedTheme.name}</Text>
+                        <Text style={{ fontSize: 11.5, color: theme.faint, marginTop: 2 }} numberOfLines={1}>
+                          {installedTheme.developer || 'Flowr'} · v{installedTheme.version || '1.0.0'} · {active ? 'Applied' : 'Not applied'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        disabled={active}
+                        onPress={() => hero && update({ customBackgroundUrl: hero })}
+                        style={{ paddingHorizontal: 12, height: 30, justifyContent: 'center', borderRadius: 8, backgroundColor: active ? theme.accent + '26' : theme.strong, borderWidth: 1, borderColor: theme.border, opacity: active ? 0.6 : 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '650', color: active ? theme.muted : theme.text }}>Apply</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => removeTheme(installedTheme)}
+                        accessibilityLabel={`Remove ${installedTheme.name}`}
+                        style={{ padding: 6, borderRadius: 8 }}>
+                        <Trash2 size={16} color={theme.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                <TouchableOpacity
+                  onPress={() => go(storeUrl || 'https://flowr.tieddr.com/store/')}
+                  style={{ marginTop: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 34, justifyContent: 'center', borderRadius: 10, backgroundColor: theme.strong, borderWidth: 1, borderColor: theme.border }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '650', color: theme.text }}>Browse the Flowr Store</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </Card>
           <Card title="Glassmorphism" icon={Sparkles} theme={theme}>
             <Text style={[s.rs, { color: theme.muted, marginBottom: 10, lineHeight: 19 }]}>Enable translucent, frosted-glass effects on the toolbar, settings sidebar, and cards. Uses your GPU for real-time blur.</Text>
             <Toggle label="Glass toolbar" detail="Frosted glass effect on the tab bar and navigation." value={settings.glassToolbar !== false} onPress={() => update({ glassToolbar: settings.glassToolbar === false })} theme={theme} />
@@ -1330,6 +1387,17 @@ function SettingsPage({ settings, profiles, active, update: persistSettings, cre
             <Toggle label="Reduce motion" detail="Minimize animations and transitions." value={!!settings.reduceMotion} onPress={() => update({ reduceMotion: !settings.reduceMotion })} theme={theme} />
             <Toggle label="High contrast" detail="Increase contrast for better visibility." value={!!settings.highContrast} onPress={() => update({ highContrast: !settings.highContrast })} theme={theme} />
             <Pick label="Default zoom" values={[0.8, 0.9, 1, 1.1, 1.25, 1.5]} value={Number(settings.defaultZoom || 1)} format={v => `${Math.round(v * 100)}%`} onPick={v => update({ defaultZoom: v })} theme={theme} />
+          </Card>
+        </>);
+      case 'apps':
+        return (<>
+          <Card title="Installed site apps" icon={LayoutGrid} theme={theme}>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Installed apps open in independent windows with manifest scope protection and your existing Flowr login session.</Text>
+            {settings.siteApps?.length ? settings.siteApps.map(item => <Row key={item.id || item.url} site={{ url: item.url, favicon: item.icon }} title={item.name || host(item.url)} sub={`${host(item.url)} · Standalone app`} onPress={() => openSiteApp(item)} theme={theme} actions={<TouchableOpacity accessibilityLabel={`Remove ${item.name}`} onPress={() => removeSiteApp(item.id)} style={{ padding: 8 }}><Trash2 size={15} color={theme.danger} /></TouchableOpacity>} />) : <Text style={[s.rs, { color: theme.muted }]}>No apps installed yet. Use “Install this PWA” or “Add this site to Flowr apps” while browsing.</Text>}
+          </Card>
+          <Card title="Site permissions" icon={Shield} theme={theme}>
+            <Text style={[s.rs, { color: theme.muted, marginBottom: 12, lineHeight: 19 }]}>Sensitive capabilities ask before use. Persistent allow and block rules can be changed or reset here.</Text>
+            {sitePermissions.length ? sitePermissions.map(item => <Pick key={`${item.origin}:${item.permission}`} label={`${item.origin} · ${item.permission.replace(/-/g, ' ')}`} values={['allow', 'block', 'reset']} value={item.decision} format={value => value === 'reset' ? 'Ask' : value === 'allow' ? 'Allow' : 'Block'} onPick={value => changeSitePermission(item.origin, item.permission, value)} theme={theme} />) : <Text style={[s.rs, { color: theme.muted }]}>No custom site rules yet. Flowr will ask when a site requests camera, microphone, location, notifications, clipboard, display capture, or another sensitive capability.</Text>}
           </Card>
         </>);
       case 'data':
@@ -1833,6 +1901,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
   const lazyRef = useRef(lazy); lazyRef.current = lazy;
   const activatedRef = useRef(false);
   const applySrcRef = useRef(null);
+  const sizeGuestRef = useRef(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1865,12 +1934,16 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       // exact cause of pages painting as a short strip above a blank surface.
       const guestFrame = wv.shadowRoot?.querySelector('iframe');
       if (guestFrame) {
+        guestFrame.style.width = '100%';
+        guestFrame.style.minWidth = '100%';
         guestFrame.style.height = '100%';
         guestFrame.style.minHeight = '100%';
       }
     };
+    sizeGuestRef.current = sizeGuest;
     const resizeObserver = new ResizeObserver(sizeGuest);
     resizeObserver.observe(host);
+    window.addEventListener('resize', sizeGuest);
     sizeGuest();
 
     const h = () => handlersRef.current;
@@ -1921,11 +1994,11 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
         const parsed = new URL(u);
         if (parsed.hostname === 'flowr.tieddr.com' && parsed.pathname === '/store/install-theme.html') {
           const manifest = parsed.searchParams.get('manifest');
-          if (manifest) { h().installTheme(manifest, wv); return; }
+          if (manifest) { h().requestPackageInstall(manifest, wv); return; }
         }
         if (parsed.hostname === 'flowr.tieddr.com' && parsed.pathname === '/store/install-extension.html') {
           const manifest = parsed.searchParams.get('manifest');
-          if (manifest) { h().installFlowrExtension(manifest, wv); return; }
+          if (manifest) { h().requestPackageInstall(manifest, wv); return; }
         }
       } catch (_) {}
 
@@ -1985,7 +2058,7 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       try { h().register(wv.getWebContentsId()); } catch (_) {}
       try {
         if (!wv.isConnected || wv.parentNode !== host) return;
-        wv.executeJavaScript(`(async function(){var m=document.querySelector('link[rel~="manifest"]');var icon=document.querySelector('link[rel="apple-touch-icon"],link[rel="icon"]');var out={manifest:m?m.href:'',icon:icon?icon.href:'',name:document.querySelector('meta[name="application-name"]')?.content||document.title||'',startUrl:location.origin};if(m){try{var data=await fetch(m.href).then(r=>r.json());out.name=data.name||data.short_name||out.name;out.startUrl=new URL(data.start_url||'/',m.href).href;var best=(data.icons||[]).slice().sort((a,b)=>(parseInt(b.sizes)||0)-(parseInt(a.sizes)||0))[0];if(best)out.icon=new URL(best.src,m.href).href}catch(e){}}return out})()`)
+        wv.executeJavaScript(`(async function(){var m=document.querySelector('link[rel~="manifest"]');var icon=document.querySelector('link[rel="apple-touch-icon"],link[rel="icon"]');var out={manifest:m?m.href:'',icon:icon?icon.href:'',name:document.querySelector('meta[name="application-name"]')?.content||document.title||'',startUrl:location.origin,scope:'',display:'browser',standalone:false};if(m){try{var response=await fetch(m.href);if(!response.ok)throw new Error('Manifest unavailable');var data=await response.json();out.name=data.name||data.short_name||out.name;out.startUrl=new URL(data.start_url||'/',m.href).href;out.scope=new URL(data.scope||'/',m.href).href;out.display=data.display||'browser';out.standalone=['standalone','fullscreen','minimal-ui','window-controls-overlay'].includes(out.display);var best=(data.icons||[]).slice().sort((a,b)=>(parseInt(b.sizes)||0)-(parseInt(a.sizes)||0))[0];if(best)out.icon=new URL(best.src,m.href).href}catch(e){}}return out})()`)
           .then(info => h().pwaDetected(tab.id, info || {})).catch(() => {});
       } catch (_) {}
       try {
@@ -2014,6 +2087,8 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
 
     return () => {
       resizeObserver.disconnect();
+      window.removeEventListener('resize', sizeGuest);
+      sizeGuestRef.current = null;
       wv.removeEventListener('did-navigate', onNav);
       wv.removeEventListener('did-navigate-in-page', onNavInPage);
       wv.removeEventListener('did-start-navigation', onStartNav);
@@ -2030,6 +2105,15 @@ const WebviewHost = React.memo(function WebviewHost({ tab, active, layout = 'ful
       if (wv.parentNode) wv.parentNode.removeChild(wv);
     };
   }, [tab.id, incognito]);
+
+  useEffect(() => {
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      sizeGuestRef.current?.();
+      secondFrame = requestAnimationFrame(() => sizeGuestRef.current?.());
+    });
+    return () => { cancelAnimationFrame(firstFrame); if (secondFrame) cancelAnimationFrame(secondFrame); };
+  }, [layout, sidePanelWidth, active]);
 
   useEffect(() => {
     if (hostRef.current) {
@@ -2084,8 +2168,26 @@ function SidePanelHost({ info, preloadUrl, contentRef, onClose, onOpenTab, theme
     wv.style.position = 'absolute'; wv.style.top = '42px'; wv.style.left = '0'; wv.style.right = '0'; wv.style.bottom = '0';
     wv.style.width = '100%'; wv.style.height = 'calc(100% - 42px)'; wv.style.border = 'none'; wv.style.background = '#ffffff';
     host.appendChild(wv);
-    wv.addEventListener('dom-ready', () => { try { ipc?.send('register-webview', wv.getWebContentsId()); } catch (_) {} });
-    return () => { if (wv.parentNode) wv.parentNode.removeChild(wv); };
+    const sizeGuest = () => {
+      const rect = host.getBoundingClientRect();
+      const height = Math.max(0, rect.height - 42);
+      if (rect.width < 1 || height < 1) return;
+      wv.style.width = `${Math.ceil(rect.width)}px`;
+      wv.style.height = `${Math.ceil(height)}px`;
+      const guestFrame = wv.shadowRoot?.querySelector('iframe');
+      if (guestFrame) {
+        guestFrame.style.width = '100%';
+        guestFrame.style.minWidth = '100%';
+        guestFrame.style.height = '100%';
+        guestFrame.style.minHeight = '100%';
+      }
+    };
+    const resizeObserver = new ResizeObserver(sizeGuest);
+    resizeObserver.observe(host);
+    window.addEventListener('resize', sizeGuest);
+    sizeGuest();
+    wv.addEventListener('dom-ready', () => { sizeGuest(); try { ipc?.send('register-webview', wv.getWebContentsId()); } catch (_) {} });
+    return () => { resizeObserver.disconnect(); window.removeEventListener('resize', sizeGuest); if (wv.parentNode) wv.parentNode.removeChild(wv); };
   }, [info.extId, info.url, preloadUrl, info.incognito]);
   return <View ref={ref} style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: info.width || 400, zIndex: 6, borderLeftWidth: 1, borderLeftColor: theme?.border || 'rgba(255,255,255,0.12)', backgroundColor: theme?.panel || '#111' }}>
     <View style={{ height: 42, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: theme?.border || 'rgba(255,255,255,0.12)' }}>
@@ -2192,7 +2294,7 @@ export default function App() {
   const [findText, setFindText] = useState('');
   const [findCount, setFindCount] = useState({ active: 0, matches: 0 });
   const [zoom, setZoom] = useState(1);
-  const [settings, setSettings] = useState({ theme: 'flow', searchEngine: 'google', blockTrackers: true, defaultZoom: 1, accentColor: '', startBackground: 'none' });
+  const [settings, setSettings] = useState({ theme: 'flow', searchEngine: 'google', adBlocker: true, adaptiveAdBlocker: true, blockTrackers: true, defaultZoom: 1, accentColor: '', startBackground: 'none' });
   const [bookmarks, setBookmarks] = useState([]);
   const [history, setHistory] = useState([]);
   const [topSites, setTopSites] = useState([]);
@@ -2217,6 +2319,7 @@ export default function App() {
   const [printPreview, setPrintPreview] = useState(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
+  const [adBlockStatus, setAdBlockStatus] = useState({ site: '', count: 0, total: 0 });
   const [splitTabId, setSplitTabId] = useState(null);
   const splitPairRef = useRef(new Set());
   const [splitChooserOpen, setSplitChooserOpen] = useState(false);
@@ -2230,7 +2333,17 @@ export default function App() {
   const contentRef = useRef(null);
   const [preloadUrl, setPreloadUrl] = useState('');
   const [overlay, setOverlay] = useState(null);
-  const dropdownOpenRef = useRef(false);
+  const pendingConfirmRef = useRef(null);
+
+  // Resolve a pending confirmDialog() promise and clear the overlay. Any other
+  // dialog action, and dismissal via the backdrop/Escape, resolves to false.
+  const settleConfirm = useCallback((value) => {
+    const resolve = pendingConfirmRef.current;
+    if (!resolve) return false;
+    pendingConfirmRef.current = null;
+    resolve(!!value);
+    return true;
+  }, []);
 
   const refreshExtActs = useCallback(async () => { if (ipc) setExtActs(await ipc.invoke('get-extension-actions') || []); }, []);
   useEffect(() => {
@@ -2243,8 +2356,15 @@ export default function App() {
     ipc.invoke('check-biometric-available').then(v => setBiometricAvailable(!!v));
     ipc.invoke('get-update-status').then(v => setUpdateStatus(v || null));
     const offUpdate = ipc.on('update-status', status => setUpdateStatus(status || null));
+    // Extensions load ~1.5s after startup, well after this effect runs. Without
+    // this push the toolbar stayed empty until the user installed or toggled
+    // something unrelated.
+    const offExtensions = ipc.on('extension-loaded', actions => setExtActs(actions || []));
     refreshExtActs();
-    return () => { if (typeof offUpdate === 'function') offUpdate(); };
+    return () => {
+      if (typeof offUpdate === 'function') offUpdate();
+      if (typeof offExtensions === 'function') offExtensions();
+    };
   }, [refreshExtActs]);
 
   const changeVaultPin = useCallback(async () => {
@@ -2431,11 +2551,31 @@ export default function App() {
     ipc.invoke('sync-tieddr-bookmarks').catch(() => {});
   }, []);
 
-  const openWebTab = useCallback((u = 'about:blank', opts = {}) => {
+// Schemes a tab is ever allowed to load. Page-controlled values (a context-menu
+// "open link in new tab", a window.open handoff, a bookmark import) reach this
+// function unchecked, and everything here flows straight into
+// wv.setAttribute('src', …). Without this guard a single <a href="javascript:…">
+// or "file://…" was one right-click away from executing.
+const TAB_URL_SCHEMES = new Set(['http:', 'https:', 'about:', 'chrome-extension:', 'flow:']);
+
+function safeTabUrl(candidate) {
+  const value = String(candidate == null ? '' : candidate).trim();
+  if (!value) return 'about:blank';
+  if (value === 'about:blank') return value;
+  let parsed;
+  try { parsed = new URL(value); } catch (_) { return null; }
+  if (!TAB_URL_SCHEMES.has(parsed.protocol)) return null;
+  // about: is only ever used for the blank page — never about:srcdoc etc.
+  if (parsed.protocol === 'about:' && parsed.href !== 'about:blank') return null;
+  return value;
+}
+
+const openWebTab = useCallback((u = 'about:blank', opts = {}) => {
     const id = nextId();
     setTabs(v => {
-      const targetUrl = u || 'about:blank';
-      const created = { id, kind: 'web', title: targetUrl === 'about:blank' ? 'New Tab' : host(targetUrl), url: targetUrl, loading: targetUrl !== 'about:blank', lastActiveAt: Date.now(), hideStart: !!opts.hideStart, groupId: opts.groupId || null, groupLabel: opts.groupLabel || '', groupColor: opts.groupColor || '' };
+      const requested = u || 'about:blank';
+      const targetUrl = safeTabUrl(requested);
+      const created = { id, kind: 'web', title: targetUrl === 'about:blank' ? 'New Tab' : host(targetUrl), url: targetUrl || 'about:blank', blockedUrl: targetUrl ? null : requested, loading: targetUrl !== 'about:blank', lastActiveAt: Date.now(), hideStart: !!opts.hideStart, groupId: opts.groupId || null, groupLabel: opts.groupLabel || '', groupColor: opts.groupColor || '' };
       const sourceIndex = opts.insertAfterId ? v.findIndex(item => item.id === opts.insertAfterId) : -1;
       if (sourceIndex >= 0) { const next = v.slice(); next.splice(sourceIndex + 1, 0, created); return next; }
       if (!opts.groupId) return v.concat(created);
@@ -2762,21 +2902,51 @@ export default function App() {
   const translate = useCallback(() => { const u = tabRef.current.url; if (u && u !== 'about:blank') openWebTab(`https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(u)}`); }, [openWebTab]);
 
   const showDialog = useCallback((d) => setOverlay({ kind: 'dialog', theme: theme, ...d }), [theme]);
-  const openSiteApp = useCallback(appItem => {
+
+  // Promise-based confirm built on the same overlay. Needed wherever the app
+  // must wait for a decision before continuing — package installation, in
+  // particular, must never happen just because a page navigated to the install
+  // URL.
+  const confirmDialog = useCallback(({ title, message, detail, confirmLabel = 'Continue', cancelLabel = 'Cancel', danger }) => {
+    return new Promise((resolve) => {
+      pendingConfirmRef.current = resolve;
+      setOverlay({
+        kind: 'dialog', theme, title, message: [message, detail].filter(Boolean).join('\n\n'),
+        actions: [
+          { label: cancelLabel, action: { kind: 'confirm-result', value: false } },
+          { label: confirmLabel, primary: !danger, danger, action: { kind: 'confirm-result', value: true } }
+        ]
+      });
+    });
+  }, [theme]);
+  const openSiteApp = useCallback(async appItem => {
     if (!appItem?.url) return;
+    if (appItem.standalone) {
+      const result = await ipc.invoke('open-site-app', appItem);
+      if (result?.ok) { setSidePanel({ open: false, extId: null }); return; }
+      showDialog({ title: 'App could not open', message: result?.error || 'Try installing this site again.' });
+      return;
+    }
     setSidePanel({ open: true, extId: `site-app:${appItem.id || host(appItem.url)}`, siteApp: true, name: appItem.name || host(appItem.url), icon: appItem.icon || '', url: appItem.url, width: 430, incognito });
-  }, [incognito]);
+  }, [incognito, showDialog]);
   const installCurrentSite = useCallback(async () => {
     const current = tabRef.current;
     if (!current?.url || current.url === 'about:blank') return;
-    const id = `site-${host(current.url).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
-    const item = { id, name: current.pwa?.name || current.title || host(current.url), url: current.pwa?.startUrl || current.url, icon: current.pwa?.icon || current.favicon || '', manifest: current.pwa?.manifest || '' };
+    const appUrl = current.pwa?.startUrl || current.url;
+    const parsed = new URL(appUrl);
+    const id = `site-${`${parsed.hostname}${parsed.pathname}`.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}`.slice(0, 120);
+    const item = { id, name: current.pwa?.name || current.title || host(current.url), url: appUrl, icon: current.pwa?.icon || current.favicon || '', manifest: current.pwa?.manifest || '', scope: current.pwa?.scope || '', display: current.pwa?.display || 'browser', standalone: true };
     const existing = Array.isArray(settingsRef.current.siteApps) ? settingsRef.current.siteApps : [];
     const next = [item, ...existing.filter(appItem => appItem.id !== id)];
     const updated = await ipc.invoke('update-settings', { siteApps: next });
     setSettings(previous => ({ ...previous, ...(updated || {}), siteApps: next }));
-    showDialog({ title: `${item.name} added to Flowr`, message: item.manifest ? 'The PWA is now available from your start page and opens in the Flowr side panel.' : 'This website is now available from your start page and opens in the Flowr side panel.' });
+    showDialog({ title: `${item.name} installed`, message: 'The app is available from your start page and Apps & Permissions. It opens in its own window while sharing your Flowr login session.', actions: [{ label: 'Done', action: null }, { label: 'Open app', primary: true, action: { siteApp: item } }] });
   }, [showDialog]);
+  const removeSiteApp = useCallback(async id => {
+    const next = (settingsRef.current.siteApps || []).filter(item => item.id !== id);
+    const updated = await ipc.invoke('update-settings', { siteApps: next });
+    setSettings(previous => ({ ...previous, ...(updated || {}), siteApps: next }));
+  }, []);
 
   // Extension toolbar: click a pinned icon to open its popup, or the puzzle
   // button for the quick-view panel of all extensions.
@@ -2921,6 +3091,7 @@ export default function App() {
   // Execute an action reported back from the overlay window.
   const runAction = useCallback((a) => {
     if (!a) return;
+    if (a.siteApp) { void openSiteApp(a.siteApp); return; }
     if (a.uiCmd) {
       const el = uiContextTargetRef.current;
       if (!el) return;
@@ -3011,7 +3182,8 @@ export default function App() {
     else if (a.kind === 'dd-ext-toggle') { toggleExtension(a.id, a.enabled); }
     else if (a.kind === 'dd-ext-pin') { pinExt(a.id, a.pinned); }
     else if (a.kind === 'dd-ext-settings' || a.kind === 'dd-ext-manage') { openPage('extensions'); }
-  }, [openWebTab, openNewTabPerSettings, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt, tabs, closeTab, groupDroppedTabs, openPrintPreview]);
+    else if (a.kind === 'confirm-result') { settleConfirm(a.value); setOverlay(null); }
+  }, [openWebTab, openNewTabPerSettings, openFind, translate, bookmark, installCurrentSite, toggleSplitView, toggleTabGroup, doZoom, openPage, load, go, toggleExtension, pinExt, clickExt, tabs, closeTab, groupDroppedTabs, openPrintPreview, settleConfirm]);
 
   useEffect(() => {
     const wv = activeWebview();
@@ -3034,21 +3206,62 @@ export default function App() {
     newTab: (url, options) => openWebTab(url, options || {}),
     register: (id) => ipc?.send('register-webview', id),
     pwaDetected: (id, info) => setTabs(items => items.map(item => item.id === id ? { ...item, pwa: info } : item)),
-    installTheme: async (manifest, wv) => {
-      const result = await ipc?.invoke('install-flowr-theme', manifest);
-      if (result?.ok) {
-        setSettings(result.settings || settingsRef.current);
-        showDialog({ title: `${result.name} installed`, message: 'The theme images and Flowr interface settings were downloaded and applied.' });
-        try { wv.goBack(); } catch (_) {}
-      } else showDialog({ title: 'Theme could not be installed', message: result?.error || 'The theme package is invalid.' });
-    },
-    installFlowrExtension: async (manifest, wv) => {
-      const result = await ipc?.invoke('install-flowr-extension', manifest);
-      if (result?.ok) {
-        setExtensions(result.extensions || []); refreshExtActs();
-        showDialog({ title: `${result.name} added`, message: 'The extension is installed and enabled in Flowr.' });
-        try { wv.goBack(); } catch (_) {}
-      } else showDialog({ title: 'Extension could not be installed', message: result?.error || 'The extension package is invalid.' });
+    // Installing a package changes the browser. Nothing may be installed just
+// because a page navigated to the install URL — any site the user visits can
+// redirect there. Read the package metadata, show exactly what it would do,
+// and only then act on the user's answer.
+requestPackageInstall: async (manifestUrl, wv) => {
+      const info = await ipc?.invoke('flowr-package-info', manifestUrl);
+      // Leave the install stub behind whether or not the user proceeds.
+      const back = () => { try { wv.goBack(); } catch (_) {} };
+      if (!info?.ok) {
+        back();
+        showDialog({ title: 'Package could not be read', message: info?.error || 'That does not look like a Flowr Store package.' });
+        return;
+      }
+      const isTheme = info.kind === 'theme';
+      const permissions = [...(info.permissions || []), ...(info.hostPermissions || [])];
+      const detail = isTheme
+        ? [
+          info.description,
+          '',
+          `${info.images} background image${info.images === 1 ? '' : 's'}.`,
+          info.changedSettings?.length
+            ? `Applying this theme will also change: ${info.changedSettings.join(', ')}.`
+            : 'No interface settings will be changed.'
+        ].filter(Boolean).join('\n')
+        : [
+          info.description,
+          '',
+          permissions.length ? `Requested permissions:\n${permissions.join('\n')}` : 'This extension requests no extra permissions.',
+          info.contentScripts ? `Runs a content script on ${info.contentScripts} match pattern(s).` : ''
+        ].filter(Boolean).join('\n');
+
+      const answer = await confirmDialog({
+        title: isTheme ? `Install “${info.name}”?` : `Add “${info.name}”?`,
+        message: `${info.developer} · version ${info.version}`,
+        detail,
+        confirmLabel: isTheme ? 'Install theme' : 'Add extension',
+        cancelLabel: 'Not now'
+      });
+      if (!answer) { back(); return; }
+
+      if (isTheme) {
+        const result = await ipc?.invoke('install-flowr-theme', manifestUrl);
+        if (result?.ok) {
+          setSettings(result.settings || settingsRef.current);
+          showDialog({ title: `${result.name} installed`, message: 'The theme images and Flowr interface settings were downloaded and applied.' });
+        } else showDialog({ title: 'Theme could not be installed', message: result?.error || 'The theme package is invalid.' });
+      } else {
+        const result = await ipc?.invoke('install-flowr-extension', manifestUrl);
+        if (result?.ok) {
+          setExtensions(result.extensions || []);
+          if (result.actions) setExtActs(result.actions);
+          else refreshExtActs();
+          showDialog({ title: `${result.name} added`, message: 'The extension is installed and enabled in Flowr.' });
+        } else showDialog({ title: 'Extension could not be installed', message: result?.error || 'The extension package is invalid.' });
+      }
+      back();
     },
     clearNavError: (id) => setTabs(items => items.map(item => item.id === id && item.error ? { ...item, error: null } : item)),
     navError: (id, url, msg, code) => setTabs(items => items.map(item => item.id === id ? { ...item, loading: false, error: { url, message: msg || 'The page could not be reached.', code } } : item))
@@ -3091,6 +3304,7 @@ export default function App() {
     listen('notes-changed', x => { setNotes(x || []); ipc.invoke('get-note-folders').then(f => setNoteFolders(f || [])); });
     listen('note-folders-changed', x => setNoteFolders(x || []));
     listen('profile-changed', load);
+    listen('adblock-status', status => setAdBlockStatus(status || { site: '', count: 0, total: 0 }));
     listen('show-context-menu', p => openContext(p));
     listen('open-url-in-new-tab', payload => {
       const url = typeof payload === 'string' ? payload : payload?.url;
@@ -3179,6 +3393,39 @@ export default function App() {
   const rmBookmark = async u => setBookmarks(await ipc.invoke('remove-bookmark', u));
   const moveBookmark = async (u, folder) => setBookmarks(await ipc.invoke('move-bookmark', u, folder));
   const createBookmarkFolder = async name => setFolders(await ipc.invoke('create-bookmark-folder', name));
+  // One-tap import of bookmarks from any Chromium-family browser already on the
+// machine. Passwords are deliberately not automatic: browsers protect them
+// from silent access, so that half always needs an explicit user action.
+const importFromDetectedBrowsers = async () => {
+    const detected = (await ipc.invoke('detect-importable-browsers')) || [];
+    if (!detected.length) {
+      showDialog({
+        title: 'No other browsers found',
+        message: 'Flowr looked for Chrome, Edge, Brave, Vivaldi, Opera and Chromium bookmark files and did not find any. You can still import from a file at any time.',
+        actions: [{ label: 'Choose files instead', action: { dialog: 'import-browser-data' } }, { label: 'Close', primary: true, action: null }]
+      });
+      return;
+    }
+    const summary = detected
+      .map(item => `${item.browser}${item.profile ? ` (${item.profile})` : ''} — about ${item.bookmarks.toLocaleString()} bookmarks`)
+      .join('\n');
+    const ok = await confirmDialog({
+      title: 'Import bookmarks?',
+      message: `Flowr found:\n\n${summary}`,
+      detail: 'Existing Flowr bookmarks are kept. Duplicates are merged. Passwords are never imported automatically.',
+      confirmLabel: 'Import bookmarks'
+    });
+    if (!ok) return;
+    const result = await ipc.invoke('import-installed-browser-bookmarks');
+    if (!result?.ok) { showDialog({ title: 'Import could not finish', message: result?.error || 'No bookmarks were imported.' }); return; }
+    setBookmarks(await ipc.invoke('get-bookmarks') || []);
+    setFolders(await ipc.invoke('get-bookmark-folders') || []);
+    showDialog({
+      title: 'Bookmarks imported',
+      message: `${result.imported} bookmarks were added from ${result.sources.join(', ')}.`,
+      actions: [{ label: 'Done', primary: true, action: null }, { label: 'Import passwords', action: { dialog: 'import-browser-data' } }]
+    });
+  };
   const signIn = async () => {
     const a = await ipc.invoke('tieddr-sign-in');
     setAccount(a || null);
@@ -3242,6 +3489,19 @@ export default function App() {
     title: 'Restore default settings?', message: 'Theme, search engine, privacy, and all preferences return to defaults. Bookmarks and history are kept.',
     actions: [{ label: 'Cancel', action: null }, { label: 'Restore defaults', primary: true, action: { dialog: 'reset' } }]
   });
+  const removeTheme = async (installedTheme) => {
+    const ok = await confirmDialog({
+      title: `Remove “${installedTheme.name}”?`,
+      message: 'The theme images are deleted from this device. You can install it again from the Flowr Store at any time.',
+      confirmLabel: 'Remove theme',
+      cancelLabel: 'Keep it',
+      danger: true
+    });
+    if (!ok) return;
+    const result = await ipc.invoke('uninstall-flowr-theme', installedTheme.id);
+    if (!result?.ok) { showDialog({ title: 'Theme could not be removed', message: result?.error || 'Unknown error.' }); return; }
+    setSettings(result.settings || settingsRef.current);
+  };
   const importBrowserData = async () => {
     const result = await ipc.invoke('import-browser-data');
     if (!result || result.canceled) return;
@@ -3270,7 +3530,7 @@ export default function App() {
       toggle={async (id, en) => { setExtensions(await ipc.invoke('toggle-extension', id, en)); refreshExtActs(); }}
       theme={theme} />,
     vault: <TieddrVaultPage state={vaultState} items={vaultItems} account={account} onSignIn={signIn} onUnlock={vaultUnlock} onLock={vaultLock} onAdd={vaultAdd} onDelete={vaultDelete} onReveal={vaultReveal} onCopy={vaultCopy} onSync={vaultSync} theme={theme} />,
-    welcome: <WelcomePage firstRun={settings.onboardingCompleted !== true} account={account} vaultUnlocked={vaultState.unlocked} onImport={importBrowserData} onSignIn={signIn} onDone={() => finishWelcome(welcomeIdRef.current)} theme={theme} />
+    welcome: <WelcomePage firstRun={settings.onboardingCompleted !== true} account={account} vaultUnlocked={vaultState.unlocked} onImport={importBrowserData} onAutoImport={importFromDetectedBrowsers} onSignIn={signIn} onDone={() => finishWelcome(welcomeIdRef.current)} theme={theme} />
   }), [bookmarks, notes, noteFolders, history, downloads, extensions, extActs, folders, installing, theme, go, vaultState, vaultItems, account, settings]);
 
   if (settings.browserLock && !vaultState.unlocked) {
@@ -3341,7 +3601,7 @@ export default function App() {
           <>
             {isStart ? (
               <View style={[s.startLayer, { backgroundColor: theme.bg }]}>
-                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} topSites={topSites} />
+                <FlowrStart go={go} open={openPage} bookmarks={bookmarks} account={account} theme={theme} topSites={topSites} apps={settings.siteApps || []} openApp={openSiteApp} />
               </View>
             ) : (
               <View style={s.topBar}>
@@ -3361,7 +3621,7 @@ export default function App() {
         {tabs.filter(t => t.kind !== 'web').map(t => (
           <View key={t.id} style={[StyleSheet.absoluteFill, { display: t.id === activeId ? 'flex' : 'none', backgroundColor: theme.bg }]}>
             {t.kind === 'settings'
-              ? <SettingsPage settings={settings} profiles={profiles} active={activeProfile} update={update} createProfile={createProfile} switchProfile={switchProfile} openPage={openPage} go={go} clearData={clearData} setDefault={setDefault} chooseDownloads={chooseDownloads} reset={reset} account={account} onSignIn={signIn} onSignOut={signOut} onImport={importBrowserData} passwords={passwords} onRevealPw={revealPw} onCopyPw={copyPw} onDeletePw={deletePw} pwEncAvail={pwEncAvail} theme={theme} biometricAvailable={biometricAvailable} changeVaultPin={changeVaultPin} storageSizes={storageSizes} clearCache={clearCache} />
+              ? <SettingsPage settings={settings} profiles={profiles} active={activeProfile} update={update} createProfile={createProfile} switchProfile={switchProfile} openPage={openPage} go={go} clearData={clearData} setDefault={setDefault} chooseDownloads={chooseDownloads} reset={reset} account={account} onSignIn={signIn} onSignOut={signOut} onImport={importBrowserData} onAutoImport={importFromDetectedBrowsers} passwords={passwords} onRevealPw={revealPw} onCopyPw={copyPw} onDeletePw={deletePw} pwEncAvail={pwEncAvail} theme={theme} biometricAvailable={biometricAvailable} changeVaultPin={changeVaultPin} storageSizes={storageSizes} clearCache={clearCache} removeTheme={removeTheme} openSiteApp={openSiteApp} removeSiteApp={removeSiteApp} />
               : <ScrollView style={s.pageScroll} contentContainerStyle={s.page}>{pageContent[t.kind]}</ScrollView>}
           </View>
         ))}
@@ -3372,7 +3632,7 @@ export default function App() {
           <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden', marginTop: 9 }}><View style={{ height: '100%', width: `${activeDownload.totalBytes ? Math.round((activeDownload.receivedBytes / activeDownload.totalBytes) * 100) : 4}%`, backgroundColor: theme.accent }} /></View>
         </TouchableOpacity> : null}
       </View>
-      {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => setOverlay(null)} onZoom={doZoom} zoom={zoom} /> : null}
+      {overlay ? <Overlay overlay={overlay} onAction={runAction} onClose={() => { settleConfirm(false); setOverlay(null); }} onZoom={doZoom} zoom={zoom} /> : null}
       {printPreview ? <PrintPreview state={printPreview} onChange={changes => refreshPrintPreview(changes)} onRefresh={() => refreshPrintPreview()} onPrint={() => ipc?.invoke('print-page', printPreview.webContentsId, printPreview)} onClose={() => setPrintPreview(null)} theme={theme} /> : null}
     </View>
   );

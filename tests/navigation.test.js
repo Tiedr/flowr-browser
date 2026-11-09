@@ -15,8 +15,17 @@ assert.match(appSource, /const go = useCallback[\s\S]*?wv\.loadURL\(u\)/);
 
 // A newly-created tab owns its initial URL before its webview is mounted, so
 // no reactive URL-to-src synchronization is needed.
-assert.match(appSource, /const targetUrl = u \|\| 'about:blank'/);
+assert.match(appSource, /const requested = u \|\| 'about:blank'/);
 assert.match(appSource, /url: targetUrl/);
+
+// The tab-creation boundary is the only choke point every externally-influenced
+// URL passes through (context-menu "open link in new tab", window.open handoff,
+// bookmark import). It must reject schemes a browser should never load, rather
+// than passing them straight to wv.setAttribute('src', …).
+assert.match(appSource, /function safeTabUrl\(/);
+assert.match(appSource, /TAB_URL_SCHEMES = new Set\(\[[^\]]*'https:'/);
+assert.match(appSource, /const targetUrl = safeTabUrl\(requested\)/);
+assert.doesNotMatch(appSource, /const targetUrl = requested/);
 
 // Mouse selection must execute before TextInput blur can unmount the popup.
 assert.match(appSource, /onMouseDown=\{e => \{[\s\S]*?e\.preventDefault\?\.\(\);[\s\S]*?navigateSuggestion\(sg\.url\);/);

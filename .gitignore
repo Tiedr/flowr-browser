@@ -2,6 +2,11 @@ node_modules/
 dist/
 release*/
 builder-cache/
+# NSIS helper files staged out of the electron-builder tool cache by
+# scripts/nsis/stage.js — copied at build time, never committed.
+scripts/nsis/elevate.exe
+scripts/nsis/Plugins/
+scripts/nsis/Include/
 # Tieddr Vault local secret (Appwrite sync key) — never commit
 src/main/vault/config.local.js
 .env

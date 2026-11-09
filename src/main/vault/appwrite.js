@@ -4,8 +4,8 @@ const { APPWRITE } = require("./config.js");
  * Dependency-free Appwrite REST client (CommonJS) — the Flow twin of the mobile/
  * desktop client. Same four Database operations, same headers, same document
  * schema, so Flow drives the SAME encrypted mirror. Uses global fetch (Node 18+/
- * Electron). JWT rides in X-Appwrite-JWT when present, else the server key in
- * X-Appwrite-Key.
+ * Electron). JWT rides in X-Appwrite-JWT. There is NO API-key fallback: a key
+ * shipped in the packaged app is extractable and must never be a transport.
  */
 
 class AppwriteError extends Error {
@@ -37,10 +37,8 @@ function docBase(collectionId) {
   return `${APPWRITE.endpoint}/databases/${APPWRITE.databaseId}/collections/${collectionId}/documents`;
 }
 function headers(jwt) {
-  const h = { "Content-Type": "application/json", "X-Appwrite-Project": APPWRITE.projectId };
-  if (jwt) h["X-Appwrite-JWT"] = jwt;
-  else if (APPWRITE.apiKey) h["X-Appwrite-Key"] = APPWRITE.apiKey;
-  return h;
+  if (!jwt) throw new AppwriteError("Missing Appwrite JWT — sign in first.", 401, "unauthorized");
+  return { "Content-Type": "application/json", "X-Appwrite-Project": APPWRITE.projectId, "X-Appwrite-JWT": jwt };
 }
 
 async function request(url, init) {

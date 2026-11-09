@@ -1,5 +1,7 @@
 const {
   PBKDF2_ITERATIONS,
+  PBKDF2_MIN_ITERATIONS,
+  PBKDF2_MAX_ITERATIONS,
   decryptString,
   deriveAesKey,
   encryptString,
@@ -30,9 +32,24 @@ function passphrase(uid, pin) {
 async function deriveAndVerify(uid, pin, meta) {
   const pass = passphrase(uid, pin);
   if (!meta || !meta.auth || !meta.auth.verifier) throw new Error("no-verifier");
-  const candidate = await verifierHash(pass, hexToBytes(meta.auth.salt), meta.auth.iterations);
+  // Bound stored KDF parameters: the meta can arrive from the network mirror,
+  // so a corrupt or hostile row must never dictate unbounded work. hexToBytes
+  // additionally rejects malformed salts.
+  const authIterations = Number(meta.auth.iterations) || PBKDF2_ITERATIONS;
+  const kdfIterations = Number(meta.kdf && meta.kdf.iterations) || PBKDF2_ITERATIONS;
+  for (const n of [authIterations, kdfIterations]) {
+    if (!Number.isInteger(n) || n < PBKDF2_MIN_ITERATIONS || n > PBKDF2_MAX_ITERATIONS) throw new Error("unsupported-kdf");
+  }
+  let kdfSalt, authSalt;
+  try {
+    authSalt = hexToBytes(meta.auth.salt);
+    kdfSalt = hexToBytes(meta.kdf.salt);
+  } catch (_) {
+    throw new Error("unsupported-kdf");
+  }
+  const candidate = await verifierHash(pass, authSalt, authIterations);
   if (!timingSafeEqual(candidate, meta.auth.verifier)) throw new Error("wrong-pin");
-  return deriveAesKey(pass, hexToBytes(meta.kdf.salt), meta.kdf.iterations || PBKDF2_ITERATIONS);
+  return deriveAesKey(pass, kdfSalt, kdfIterations);
 }
 
 async function decryptItems(cacheEntries, key) {
@@ -60,21 +77,17 @@ function hostOf(url) {
     return "";
   }
 }
-function baseDomain(host) {
-  const parts = host.split(".");
-  if (parts.length <= 2) return host;
-  const twoLabel = new Set(["co", "com", "org", "net", "gov", "edu", "ac"]);
-  const last2 = parts.slice(-2);
-  if (twoLabel.has(last2[0]) && last2[1].length <= 3) return parts.slice(-3).join(".");
-  return parts.slice(-2).join(".");
-}
 function itemMatchesHost(item, pageHost) {
+  // Fail closed against phishing: a saved login matches only its exact host
+  // or a SUBDOMAIN of it (pageHost === target or pageHost ends with
+  // "." + target). Never the reverse (a login saved on login.example.com must
+  // not fill on example.com or evil-login.example.com), and never fuzzy
+  // title matching — attacker pages pick their own titles. Items without a
+  // stored URL never match.
   if (!pageHost) return false;
   const target = item.url ? hostOf(item.url) : "";
-  if (target) return target === pageHost || baseDomain(target) === baseDomain(pageHost);
-  const t = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const h = pageHost.replace(/[^a-z0-9]/g, "");
-  return !!t && (h.includes(t) || t.includes(baseDomain(pageHost).split(".")[0]));
+  if (!target) return false;
+  return pageHost === target || pageHost.endsWith(`.${target}`);
 }
 function passwordMatches(items, pageHost) {
   return items

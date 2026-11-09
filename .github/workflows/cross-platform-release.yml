@@ -6,7 +6,7 @@ on:
       release_tag:
         description: Existing GitHub release tag to update
         required: true
-        default: v1.1.8
+        default: v1.2.0
 
 permissions:
   contents: write
@@ -23,7 +23,7 @@ jobs:
           - runner: ubuntu-24.04
             command: dist:linux
             artifact: flowr-linux-x64
-          - runner: macos-14
+          - runner: macos-15
             command: dist:mac:all
             artifact: flowr-macos-all
     runs-on: ${{ matrix.runner }}
@@ -35,11 +35,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:adblock
+      - run: npm run test:adaptive-adblock
+      - run: npm run test:site-apps
       - run: npm run test:updater
       - run: npm run test:privacy
       - run: npm run test:importer
       - run: npm run test:navigation
       - run: npm run test:account-session
+      - run: npm run test:browser-identity
+      - run: npm run test:startup-package
       - name: Prepare App Store Connect API key
         if: runner.os == 'macOS'
         shell: bash
@@ -53,8 +57,8 @@ jobs:
       - name: Build, sign and notarize
         run: npm run ${{ matrix.command }}
         env:
-          CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY: ${{ runner.temp }}/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}

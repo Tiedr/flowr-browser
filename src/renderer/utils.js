@@ -4,10 +4,13 @@ import { Shield, Settings, Bookmark, FileText, History, Download, Puzzle, Globe,
 import logo from '../../build/icons/flowr-transparent.png';
 import packageInfo from '../../package.json';
 import vaultLogo from '../../vaultmark.png';
-import bgAbstract from '../assets/backgrounds/abstract-glass.png';
-import bgNature from '../assets/backgrounds/nature-aurora.png';
-import bgBirds from '../assets/backgrounds/birds-rainforest.png';
-import bgHeroes from '../assets/backgrounds/original-guardians.png';
+// Start-page wallpapers are photographic, so they ship as JPEG. The originals
+// were 24-bit PNGs of 1.5-2 MB each — 7 MB of the 8.6 MB install for four
+// full-screen backgrounds that are only ever shown as a CSS background.
+import bgAbstract from '../assets/backgrounds/abstract-glass.jpg';
+import bgNature from '../assets/backgrounds/nature-aurora.jpg';
+import bgBirds from '../assets/backgrounds/birds-rainforest.jpg';
+import bgHeroes from '../assets/backgrounds/original-guardians.jpg';
 import spaceLogo from '../assets/tieddr/space.png';
 import tieddrVaultLogo from '../assets/tieddr/vault.png';
 import mavisLogo from '../assets/tieddr/mavis.png';
@@ -25,15 +28,20 @@ const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const T_BG = { transitionProperty: 'background-color, border-color, opacity', transitionDuration: '160ms', transitionTimingFunction: EASE };
 const HOVER = { hoverable: '1' };
 
+// Accent resolution and theme-package validation live in a shared module so the
+// renderer, the main process and the packaging audit all agree on exactly what
+// a theme may declare. See src/shared/theme-settings.js.
+const { resolveAccent, ACCENT_PRESETS: ACCENT_PRESET_COLORS } = require('../shared/theme-settings');
+
 // Accent color presets — user can pick any of these (or the theme default).
 const ACCENT_PRESETS = [
-  { id: 'blue', label: 'Blue', color: '#3268e6' },
-  { id: 'purple', label: 'Purple', color: '#7a5fe0' },
-  { id: 'teal', label: 'Teal', color: '#0ea5a1' },
-  { id: 'green', label: 'Green', color: '#0e9d62' },
-  { id: 'rose', label: 'Rose', color: '#e04670' },
-  { id: 'orange', label: 'Orange', color: '#e67a32' },
-  { id: 'slate', label: 'Slate', color: '#64748b' },
+  { id: 'blue', label: 'Blue', color: ACCENT_PRESET_COLORS.blue },
+  { id: 'purple', label: 'Purple', color: ACCENT_PRESET_COLORS.purple },
+  { id: 'teal', label: 'Teal', color: ACCENT_PRESET_COLORS.teal },
+  { id: 'green', label: 'Green', color: ACCENT_PRESET_COLORS.green },
+  { id: 'rose', label: 'Rose', color: ACCENT_PRESET_COLORS.rose },
+  { id: 'orange', label: 'Orange', color: ACCENT_PRESET_COLORS.orange },
+  { id: 'slate', label: 'Slate', color: ACCENT_PRESET_COLORS.slate },
 ];
 
 // Start page background presets — built-in images the user can choose from.
@@ -61,15 +69,22 @@ const START_BGS = [
   { id: 'photo-night', label: 'Night Sky', thumb: null, css: 'linear-gradient(rgba(0,0,0,0.15), rgba(0,0,0,0.35)), url(https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80) center/cover no-repeat' },
 ];
 
+// Accent resolution and theme-package validation live in a shared module so the
+// renderer, the main process and the packaging audit all agree on exactly what
+// a theme may declare. See src/shared/theme-settings.js.
+
 // Resolve a theme: base theme + optional accent color override + optional
 // high-contrast boost (Settings → Languages & Accessibility).
 function resolveTheme(themeId, accentId, highContrast) {
   const base = THEMES[themeId] || THEMES.flow || THEMES.aurora;
-  const preset = ACCENT_PRESETS.find(a => a.id === accentId);
+  // Accepts either a preset id ('purple') or a literal hex colour ('#8f75ff').
+  // Flowr Store theme packages ship hex accents, so an id-only resolver
+  // discarded the accent of every published theme.
+  const accent = resolveAccent(accentId);
   let resolved = base;
-  if (preset) {
+  if (accent) {
     // Derive accentSoft from the accent color (10% opacity overlay).
-    resolved = { ...base, accent: preset.color, accentSoft: preset.color + '1a', onAccent: '#ffffff' };
+    resolved = { ...base, accent, accentSoft: accent + '1a', onAccent: '#ffffff' };
   }
   if (!highContrast) return resolved;
   const dark = luminance(resolved.bg) < 140;
@@ -205,7 +220,7 @@ function luminance(hex) {
 export {
   ipc, CHROME_H, BANNER_H, FIND_H, APP_VERSION, EASE, T_BG, HOVER,
   THEMES, ACCENT_PRESETS, START_BGS, ENGINES, PAGES, TIEDDR_APPS,
-  resolveTheme, urlOf, host, when, bytes, trunc, storeIdOf,
+  resolveTheme, resolveAccent, urlOf, host, when, bytes, trunc, storeIdOf,
   Brand, TieddrMark, VaultMark, SiteIcon, GLASS_LIGHT, GLASS_MEDIUM, GLASS_HEAVY,
   applyGlassSettings
 };

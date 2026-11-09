@@ -10,7 +10,7 @@ Flow Browser is for people who want a lightweight desktop browser that feels cal
 
 ## Product Purpose
 
-Flow Browser exists to provide a focused Electron browser with a refined native-app feel and enough utility to be genuinely usable as a daily driver. Success means the app launches reliably, navigation feels predictable, browser data is easy to manage, and advanced features such as themes and Chrome-compatible unpacked extensions are discoverable without cluttering the primary browsing surface.
+Flow Browser exists to provide a focused desktop browser with a refined native-app feel and enough utility to be genuinely usable as a daily driver. Success means the app launches reliably, navigation feels predictable, browser data is easy to manage, and advanced features such as themes and Chrome-compatible unpacked extensions are discoverable without cluttering the primary browsing surface.
 
 ## Brand Personality
 

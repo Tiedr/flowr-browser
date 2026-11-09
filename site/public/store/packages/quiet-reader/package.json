@@ -1,1 +1,17 @@
-{"flowrExtensionVersion":1,"id":"quiet-reader","name":"Quiet Reader","version":"1.0.0","files":[{"path":"manifest.json","url":"/store/packages/quiet-reader/manifest.json"},{"path":"service.js","url":"/store/packages/quiet-reader/service.js"}]}
+{
+  "flowrExtensionVersion": 1,
+  "id": "quiet-reader",
+  "name": "Quiet Reader",
+  "version": "1.0.0",
+  "developer": "Tieddr",
+  "description": "Turn the current article into a calm, adjustable reading surface with balanced typography, spacing and a distraction-free editorial layout.",
+  "permissions": ["activeTab", "scripting"],
+  "hostPermissions": [],
+  "files": [
+    { "path": "manifest.json", "url": "/store/packages/quiet-reader/manifest.json" },
+    { "path": "popup.html", "url": "/store/packages/quiet-reader/popup.html" },
+    { "path": "popup.css", "url": "/store/packages/quiet-reader/popup.css" },
+    { "path": "popup.js", "url": "/store/packages/quiet-reader/popup.js" },
+    { "path": "reader.js", "url": "/store/packages/quiet-reader/reader.js" }
+  ]
+}

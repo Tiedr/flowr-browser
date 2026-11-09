@@ -5,8 +5,6 @@ import * as Icons from 'lucide-react';
 // <webview> elements as normal siblings. Plain DOM + inline styles so
 // backdrop-filter (real glassmorphism) works reliably. Driven entirely by the
 // `overlay` prop set by App.
-const ipc = window.electron?.ipcRenderer;
-
 function hexA(hex, a) {
   if (!hex) return `rgba(20,24,34,${a})`;
   const h = hex.replace('#', '');
@@ -69,23 +67,13 @@ export default function Overlay({ overlay: s, onAction, onClose, onZoom, zoom })
   if (!s) return null;
   const t = s.theme || {};
   const dark = isDark(t.panel);
-  const isDropdown = s.kind === 'dropdown';
 
   const fire = (item) => {
     if (item.disabled || item.type) return;
     close(() => onAction && onAction(item.action));
   };
 
-  const glass = isDropdown ? {
-    background: hexA(t.panel, dark ? 0.82 : 0.88),
-    backdropFilter: REDUCE ? undefined : 'blur(30px) saturate(1.5)',
-    WebkitBackdropFilter: REDUCE ? undefined : 'blur(30px) saturate(1.5)',
-    border: `1px solid ${hexA(dark ? '#ffffff' : '#0b0e14', dark ? 0.12 : 0.1)}`,
-    boxShadow: dark
-      ? '0 16px 48px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.4)'
-      : '0 16px 48px rgba(15,20,30,0.18), 0 2px 8px rgba(15,20,30,0.1)',
-    borderRadius: 12
-  } : {
+  const glass = {
     background: hexA(t.panel, dark ? 0.86 : 0.9),
     backdropFilter: REDUCE ? undefined : 'blur(30px) saturate(1.5)',
     WebkitBackdropFilter: REDUCE ? undefined : 'blur(30px) saturate(1.5)',
@@ -144,100 +132,6 @@ export default function Overlay({ overlay: s, onAction, onClose, onZoom, zoom })
         </div>
       </div>
     );
-  }
-
-  // Dropdowns (suggestions / extensions) render fixed at the address bar.
-  if (isDropdown) {
-    const pos = s.position || { x: 12, y: 84, width: 300 };
-    const style = { position: 'absolute', left: pos.x, top: pos.y, width: pos.width, maxHeight: '70vh', overflowY: 'auto', borderRadius: 12, borderWidth: 0, overflow: 'hidden', ...glass, ...anim(closing ? 'flowMenuOut' : 'flowMenu', closing ? EXIT_MS : 210, closing ? 'forwards' : 'both') };
-
-    if (s.type === 'suggestions') {
-      return (
-        <div style={{ position: 'fixed', inset: 0, background: 'transparent' }} onMouseDown={e => { e.preventDefault(); dismiss(); }}>
-          <div style={style} onMouseDown={e => e.stopPropagation()}>
-            {s.items.map((item, i) => (
-              <div key={item.url + i}
-                onClick={() => { close(() => onAction && onAction({ kind: 'dd-click', url: item.url, type: item.type })); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer', borderBottom: `1px solid ${hexA(t.border, 0.3)}`, background: i === (s.selectedIdx || -1) ? hexA(t.accent, 0.14) : 'transparent', transition: 'background-color .1s' }}
-                onMouseEnter={e => { if (i !== (s.selectedIdx || -1)) e.currentTarget.style.background = hexA(dark ? '#ffffff' : t.accent, dark ? 0.07 : 0.09); }}
-                onMouseLeave={e => { if (i !== (s.selectedIdx || -1)) e.currentTarget.style.background = 'transparent'; }}
-              >
-                {item.favicon
-                  ? <img src={item.favicon} width={16} height={16} style={{ borderRadius: 3, flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none'; }} />
-                  : item.type === 'bookmark' ? <Ico name="Star" size={14} color={t.accent} />
-                  : item.type === 'search' ? <Ico name="Search" size={14} color={t.muted} />
-                  : <Ico name="Globe" size={14} color={t.muted} />}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                  <div style={{ fontSize: 11, color: t.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.displayUrl || ''}</div>
-                </div>
-                <div style={{ fontSize: 10, color: t.faint, flexShrink: 0 }}>{item.type === 'bookmark' ? 'Bookmark' : item.type === 'search' ? 'Search' : 'History'}</div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 12, padding: '8px 16px', borderTop: `1px solid ${hexA(t.border, 0.4)}`, fontSize: 11, color: t.muted }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={keyStyle}>↑↓</span><span>navigate</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={keyStyle}>↵</span><span>select</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={keyStyle}>Esc</span><span>close</span></div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (s.type === 'extensions') {
-      return (
-        <div style={{ position: 'fixed', inset: 0, background: 'transparent' }} onMouseDown={e => { e.preventDefault(); dismiss(); }}>
-          <div style={style} onMouseDown={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: `1px solid ${hexA(t.border, 0.5)}` }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Extensions</span>
-              <div onClick={() => { close(() => onAction && onAction({ kind: 'dd-ext-settings' })); }}
-                style={{ cursor: 'pointer', padding: 4, borderRadius: 6, transition: 'background .12s' }}
-                onMouseEnter={e => e.currentTarget.style.background = hexA(t.text, 0.08)} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <Ico name="Settings" size={16} color={t.muted} />
-              </div>
-            </div>
-            {(!s.items || s.items.length === 0) ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px 14px' }}>
-                <Ico name="Puzzle" size={24} color={t.faint} />
-                <span style={{ color: t.muted, fontSize: 13 }}>No extensions installed</span>
-              </div>
-            ) : s.items.map(ext => (
-              <div key={ext.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', transition: 'background-color .1s' }}
-                onMouseEnter={e => e.currentTarget.style.background = hexA(dark ? '#ffffff' : t.accent, dark ? 0.05 : 0.06)}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, cursor: 'pointer' }}
-                  onClick={() => { close(() => onAction && onAction({ kind: 'dd-ext-click', id: ext.id })); }}>
-                  {ext.iconUrl
-                    ? <img src={ext.iconUrl} width={28} height={28} style={{ borderRadius: 6, flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none'; }} />
-                    : <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hexA(t.accent, 0.15), flexShrink: 0 }}><Ico name="Puzzle" size={14} color={t.accent} /></div>}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ext.name}</div>
-                    <div style={{ fontSize: 11, color: t.muted, marginTop: 2 }}>{ext.sidePanel ? 'Side panel' : ext.popup ? 'Popup' : 'Options'}</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div onClick={() => onAction && onAction({ kind: 'dd-ext-toggle', id: ext.id, enabled: !ext.enabled })}
-                    style={{ width: 28, height: 16, borderRadius: 8, position: 'relative', cursor: 'pointer', background: ext.enabled ? hexA(t.accent, 0.3) : hexA(t.strong, 0.5) }}>
-                    <div style={{ width: 12, height: 12, borderRadius: 6, position: 'absolute', top: 2, left: 2, background: ext.enabled ? t.accent : t.muted, transform: `translateX(${ext.enabled ? 12 : 0}px)`, transition: 'transform .15s ease, background .15s ease' }} />
-                  </div>
-                  <div onClick={() => onAction && onAction({ kind: 'dd-ext-pin', id: ext.id, pinned: !ext.pinned })}
-                    style={{ padding: 4, cursor: 'pointer' }}>
-                    <Ico name="Pin" size={14} color={ext.pinned ? t.accent : t.muted} />
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div style={{ padding: '10px 14px', borderTop: `1px solid ${hexA(t.border, 0.5)}` }}>
-              <div onClick={() => { close(() => onAction && onAction({ kind: 'dd-ext-manage' })); }}
-                style={{ cursor: 'pointer', fontSize: 13, color: t.accent, transition: 'opacity .12s' }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.8'} onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                Manage extensions
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
   }
 
   const W = s.width || 272;

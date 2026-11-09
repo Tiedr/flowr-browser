@@ -24,4 +24,21 @@ async function getWatermark() { const n = Number(ensure().get("watermark")); ret
 async function setWatermark(n) { ensure().set("watermark", n); }
 async function clearAll() { ensure().set("meta", null); ensure().set("itemsCache", []); ensure().set("watermark", 0); }
 
-module.exports = { init, getMeta, setMeta, getItemsCache, setItemsCache, getWatermark, setWatermark, clearAll };
+/* --------------------------------------- PIN throttling (persisted) */
+// Consecutive-failure counter + lockout deadline survive restarts, so an
+// attacker can't reset the backoff by relaunching the app. (This throttles
+// the local unlock oracle — it cannot stop an offline copy of the file being
+// brute-forced elsewhere; the KDF cost is the defense there.)
+async function getLockState() {
+  const s = ensure();
+  const a = Math.floor(Number(s.get("lockAttempts")) || 0);
+  const u = Number(s.get("lockoutUntil")) || 0;
+  return { attempts: a > 0 ? a : 0, lockoutUntil: u > 0 ? u : 0 };
+}
+async function setLockState(next) {
+  const s = ensure();
+  s.set("lockAttempts", Math.max(0, Math.floor(Number(next && next.attempts) || 0)));
+  s.set("lockoutUntil", Math.max(0, Number(next && next.lockoutUntil) || 0));
+}
+
+module.exports = { init, getMeta, setMeta, getItemsCache, setItemsCache, getWatermark, setWatermark, clearAll, getLockState, setLockState };
